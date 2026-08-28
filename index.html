@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Synonym Ladder</title>
+<meta name="description" content="A thesaurus word game: chain synonyms outward from a seed word.">
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='14'>🪜</text></svg>">
+</head>
+<body>
+
+<header class="bar">
+  <div class="brand">synonym ladder</div>
+  <nav class="modes">
+    <button type="button" class="link" data-mode="daily">daily</button>
+    <button type="button" class="link" data-mode="practice">practice</button>
+    <a class="link" href="about.html">about</a>
+  </nav>
+  <div class="bar-right">
+    <span id="tier-picker" class="tiers" hidden>
+      <button type="button" class="chip" data-tier="easy">simple</button>
+      <button type="button" class="chip" data-tier="medium">literary</button>
+      <button type="button" class="chip" data-tier="hard">erudite</button>
+    </span>
+    <button type="button" class="link" id="btn-new">new word</button>
+    <span class="account" id="account">
+      <button type="button" class="link" id="btn-who" title="your scoreboard name">…</button>
+      <button type="button" class="link" id="btn-signin" hidden>sign in</button>
+    </span>
+  </div>
+</header>
+
+<div class="signin-sheet" id="signin-sheet" hidden>
+  <div class="signin-card">
+    <h2>Play on the scoreboard</h2>
+    <p>Sign in to keep your rounds and appear on the boards. Anonymous works the same way — you just can't recover the account on another device.</p>
+    <div class="signin-actions">
+      <button type="button" id="btn-google">continue with Google</button>
+      <button type="button" class="link" id="btn-anon">play anonymously</button>
+    </div>
+    <p class="signin-note" id="signin-note"></p>
+    <button type="button" class="link" id="btn-signin-close">not now</button>
+  </div>
+</div>
+
+<main>
+  <section class="stage">
+    <div class="seed-block">
+      <div class="seed-label" id="seed-label">daily puzzle</div>
+      <h1 class="seed" id="seed">…</h1>
+    </div>
+    <div class="scoreboard">
+      <div class="stat"><span class="stat-value" id="stat-score">0</span><span class="stat-key">score</span></div>
+      <div class="stat"><span class="stat-value" id="stat-words">0</span><span class="stat-key">words</span></div>
+      <div class="stat"><span class="stat-value miss" id="stat-tries">0</span><span class="stat-key">tries</span></div>
+      <div class="stat"><span class="stat-value" id="stat-left">20</span><span class="stat-key">entries left</span></div>
+      <div class="stat"><span class="stat-value" id="stat-time">0:00</span><span class="stat-key">time</span></div>
+    </div>
+  </section>
+
+  <section class="entry">
+    <form id="guess-form" autocomplete="off">
+      <input id="guess" type="text" placeholder="type a synonym…" spellcheck="false"
+             autocapitalize="none" autocomplete="off" enterkeyhint="send">
+      <button type="submit" id="submit">add</button>
+    </form>
+    <p class="message" id="message" role="status" aria-live="polite">
+      Find synonyms of the seed word. Once a word is on the board, its own synonyms count too — for fewer points. You have 20 entries; a word that lands nowhere costs 1 point. The clock starts on your first entry.
+    </p>
+  </section>
+
+  <section class="board">
+    <table id="board-table">
+      <thead>
+        <tr>
+          <th><span class="col-name">1st order</span><span class="col-meta"><b>8</b> pts · <span data-count="1">0</span></span></th>
+          <th><span class="col-name">2nd order</span><span class="col-meta"><b>4</b> pts · <span data-count="2">0</span></span></th>
+          <th><span class="col-name">3rd order</span><span class="col-meta"><b>2</b> pts · <span data-count="3">0</span></span></th>
+          <th><span class="col-name">4th order</span><span class="col-meta"><b>1</b> pt · <span data-count="4">0</span></span></th>
+        </tr>
+      </thead>
+      <tbody id="board-body"></tbody>
+    </table>
+  </section>
+
+  <section class="tries-block" id="tries-block" hidden>
+    <h2 class="tries-head">tries <span class="tries-cost" id="tries-cost"></span></h2>
+    <ul class="tries" id="tries-list"></ul>
+    <p class="tries-note">Already charged — try them again for free as the board grows.</p>
+  </section>
+
+  <section class="roots-block" id="roots-block" hidden>
+    <h2 class="tries-head">same root <span class="roots-cost">no cost</span></h2>
+    <ul class="roots" id="roots-list"></ul>
+  </section>
+
+  <!-- The result sits between the board lists and the controls, so it lands
+       where the player's eye already is when the round ends. -->
+  <section class="panel over" id="summary" hidden>
+    <div class="over-flag" id="over-flag">round over</div>
+    <h2 id="summary-title">Round over</h2>
+    <p class="over-reason" id="over-reason"></p>
+    <div class="summary-grid" id="summary-grid"></div>
+    <p class="missed" id="summary-missed"></p>
+    <div class="panel-actions">
+      <button type="button" id="btn-copy">copy result</button>
+      <button type="button" class="link" id="btn-again">play again</button>
+    </div>
+  </section>
+
+  <section class="finish">
+    <button type="button" class="link" id="btn-finish">finish round</button>
+    <button type="button" class="link" id="btn-board">scoreboard</button>
+    <button type="button" class="link" id="btn-metrics">metrics</button>
+    <button type="button" class="link" id="btn-rules">how it works</button>
+  </section>
+
+  <section class="panel" id="board" hidden>
+    <div class="board-head">
+      <h2>Scoreboard</h2>
+      <span class="board-where" id="board-where"></span>
+    </div>
+    <nav class="board-tabs" id="board-tabs">
+      <button type="button" class="chip" data-board="easy">simple</button>
+      <button type="button" class="chip" data-board="medium">literary</button>
+      <button type="button" class="chip" data-board="hard">erudite</button>
+      <button type="button" class="chip" data-board="me">your progress</button>
+    </nav>
+    <div class="board-scroll">
+      <table class="board-table" id="board-scores">
+        <thead id="board-thead"></thead>
+        <tbody id="board-tbody"></tbody>
+      </table>
+    </div>
+    <p class="board-note" id="board-note"></p>
+    <div class="panel-actions">
+      <button type="button" class="link" id="btn-board-close">close</button>
+      <button type="button" class="link" id="btn-rename">change name</button>
+    </div>
+  </section>
+
+  <section class="panel" id="metrics" hidden>
+    <h2>Metrics</h2>
+    <div class="metric-groups" id="metric-groups"></div>
+    <div class="hist-block">
+      <h3 class="metric-head">word length</h3>
+      <div class="hist" id="hist"></div>
+    </div>
+    <div class="panel-actions">
+      <button type="button" class="link" id="btn-metrics-close">close</button>
+    </div>
+  </section>
+
+  <section class="panel" id="rules" hidden>
+    <h2>How it works</h2>
+    <ul>
+      <li>A seed word sits at the top. Every synonym of it you name is a <b>1st-order</b> word, worth <b>8</b> points.</li>
+      <li>Once a word is on the board, <i>its</i> synonyms count as the next rung out: <b>2nd order</b> = 4 points, <b>3rd</b> = 2, <b>4th</b> = 1. Nothing counts past the 4th rung.</li>
+      <li>A word always takes its <b>shortest trace</b> back to the seed. If a later find gives it a shorter route, it moves up a rung and scores more — a 4th-order word that turns out to be reachable in three steps becomes 3rd order. Extra links beyond that shortest trace are ignored, so there are no loops to untangle.</li>
+      <li>You get <b>20 entries</b>. A word that lands and a word that misses each spend one; same-root words and repeats of what's already on the board are free. When the 20 are gone the round is over.</li>
+      <li>The clock starts on your first entry, not when the word appears.</li>
+      <li>A word that links to nothing — a miss or a misspelling — drops into <b>tries</b> and costs <b>1</b> point. There is no spellcheck and no hint about what went wrong.</li>
+      <li>A word is charged once. Anything on the tries list can be entered again for free, as often as you like — a word that linked to nothing early on may well land once the board has grown around it.</li>
+      <li>A word sharing a root with one already in play (<i>discord</i> and <i>discordant</i> are the same word) goes to <b>same root</b> instead. That bucket is neutral: no points, no penalty. It isn't a wrong answer, it just can't be its own answer.</li>
+      <li>A <span class="dot loose" aria-hidden="true"></span> marks a looser link — the thesaurus data connects the two words, but not as a strict synonym.</li>
+      <li>The whole point is breadth at the first rung: eight 1st-order words beat sixteen 4th-order ones.</li>
+      <li><b>Simple</b>, <b>literary</b> and <b>erudite</b> describe the seed word, not you. Rarer seeds have thinner thesaurus entries, so there is less to find and further to reach.</li>
+    </ul>
+    <div class="panel-actions">
+      <button type="button" class="link" id="btn-rules-close">close</button>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  Word data from <a href="https://www.datamuse.com/api/" target="_blank" rel="noopener">Datamuse</a>.
+</footer>
+
+<script src="config.js"></script>
+<script src="words.js"></script>
+<script src="engine.js"></script>
+<script src="scoreboard.js"></script>
+<script src="app.js"></script>
+<!-- Loaded only when config.js carries Supabase credentials. -->
+<script>
+  (function () {
+    var c = window.SL_CONFIG || {};
+    if (!c.supabaseUrl || !c.supabaseAnonKey) return;
+    var s = document.createElement('script');
+    s.type = 'module';
+    s.src = 'cloud.js';
+    document.body.appendChild(s);
+  })();
+</script>
+</body>
+</html>

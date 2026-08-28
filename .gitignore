@@ -1,0 +1,31 @@
+# OS and editor noise
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+.idea/
+.vscode/
+
+# Local server / tooling leftovers
+node_modules/
+.cache/
+dist/
+
+# Local notes you don't want published
+NOTES.md
+scratch/
+
+# ------------------------------------------------------------------
+# config.js is deliberately NOT ignored.
+#
+# It holds the Supabase project URL and the "anon public" key, both of
+# which are meant to live in the browser — every visitor downloads them
+# anyway. Row Level Security is what protects the data.
+#
+# What must never be committed is a service_role key or any other
+# secret. If you ever add one, put it in a file named below and keep it
+# out of the repo.
+# ------------------------------------------------------------------
+secrets.js
+.env
+.env.*
