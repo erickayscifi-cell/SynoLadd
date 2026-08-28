@@ -9,7 +9,7 @@
    ------------------------------------------------------------------ */
 
 window.SL_CONFIG = {
-  supabaseUrl: 'https://upqcvyeehiamujmaubek.supabase.com',        // e.g. 'https://abcdefgh.supabase.co'
+  supabaseUrl: 'https://upqcvyeehiamujmaubek.supabase.co',        // e.g. 'https://abcdefgh.supabase.co'
   supabaseAnonKey: 'sb_publishable_TXKtsw8z2eNz5ZFSY62uZQ_CVvJCeM4',    // the "anon public" key from Project Settings → API
 
   appVersion: '0.5',      // stored with each round, so old data stays readable
