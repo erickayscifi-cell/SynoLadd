@@ -9,8 +9,8 @@
    ------------------------------------------------------------------ */
 
 window.SL_CONFIG = {
-  supabaseUrl: '',        // e.g. 'https://abcdefgh.supabase.co'
-  supabaseAnonKey: '',    // the "anon public" key from Project Settings → API
+  supabaseUrl: 'https://upqcvyeehiamujmaubek.supabase.com',        // e.g. 'https://abcdefgh.supabase.co'
+  supabaseAnonKey: 'sb_publishable_TXKtsw8z2eNz5ZFSY62uZQ_CVvJCeM4',    // the "anon public" key from Project Settings → API
 
   appVersion: '0.5',      // stored with each round, so old data stays readable
   boardSize: 25,          // rows shown per leaderboard
