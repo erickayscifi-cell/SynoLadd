@@ -8,12 +8,27 @@ import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 const cfg = window.SL_CONFIG || {};
 const scoreboard = window.SLGame && window.SLGame.scoreboard;
 
+/* The dashboard shows the Data API endpoint as
+   https://<ref>.supabase.co/rest/v1/ — but the client wants the project
+   origin and appends /rest/v1, /auth/v1 and /realtime/v1 itself. Left in
+   place, that path would send auth calls to /rest/v1/auth/v1/… and every
+   sign-in would fail with a confusing 404. So trim it rather than let the
+   mistake bite. */
+function projectOrigin(raw) {
+  const trimmed = String(raw || '').trim().replace(/\/+$/, '');
+  const cleaned = trimmed.replace(/\/(rest|auth|realtime|storage)\/v\d+$/i, '');
+  if (cleaned !== trimmed) {
+    console.info('[synonym ladder] trimmed the API path from supabaseUrl — using ' + cleaned);
+  }
+  return cleaned;
+}
+
 if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) {
   console.info('[synonym ladder] no Supabase credentials — scoreboard stays local.');
 } else if (!scoreboard) {
   console.warn('[synonym ladder] scoreboard not ready; cloud driver idle.');
 } else {
-  const supabase = createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, {
+  const supabase = createClient(projectOrigin(cfg.supabaseUrl), cfg.supabaseAnonKey, {
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
   });
 

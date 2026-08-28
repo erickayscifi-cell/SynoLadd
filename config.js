@@ -9,8 +9,19 @@
    ------------------------------------------------------------------ */
 
 window.SL_CONFIG = {
-  supabaseUrl: 'https://upqcvyeehiamujmaubek.supabase.co',        // e.g. 'https://abcdefgh.supabase.co'
-  supabaseAnonKey: 'sb_publishable_TXKtsw8z2eNz5ZFSY62uZQ_CVvJCeM4',    // the "anon public" key from Project Settings → API
+  // The project ORIGIN only — no path, no trailing slash. The client adds
+  // /rest/v1, /auth/v1 and the rest on its own.
+  //   dashboard address   https://supabase.com/dashboard/project/<ref>  ✗
+  //   Data API endpoint   https://<ref>.supabase.co/rest/v1/            ✗
+  //   what goes here      https://<ref>.supabase.co                     ✓
+  // (A stray /rest/v1 is trimmed automatically, with a console note.)
+  supabaseUrl: '',
+
+  // Project Settings → API keys. Either the newer "publishable" key
+  // (sb_publishable_…) or the legacy "anon public" JWT (eyJ…) works — they
+  // are interchangeable here. Legacy keys are being retired through 2026,
+  // so prefer the publishable one. Never the secret / service_role key.
+  supabaseAnonKey: '',
 
   appVersion: '0.5',      // stored with each round, so old data stays readable
   boardSize: 25,          // rows shown per leaderboard
