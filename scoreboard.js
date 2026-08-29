@@ -221,7 +221,13 @@
       },
       remoteIdentity: function () { return remote ? remote.identity() : null; },
       signIn: function (how) {
-        if (!remote) return Promise.reject(new Error('no scoreboard service configured'));
+        if (!remote) {
+          // Name the actual cause - "not configured" sent someone hunting
+          // through Supabase when the answer was an empty config.js.
+          return Promise.reject(new Error(options.cloudConfigured
+            ? 'the scoreboard service did not finish loading — check the browser console'
+            : 'config.js has no supabaseUrl / supabaseAnonKey, so there is nothing to sign in to'));
+        }
         return how === 'google' ? remote.signInWithGoogle() : remote.signInAnonymously();
       },
       signOut: function () {

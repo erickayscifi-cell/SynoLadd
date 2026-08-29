@@ -172,14 +172,26 @@ if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) {
 
   /* ---------- wire up ---------- */
 
-  supabase.auth.onAuthStateChange(async (_event, next) => {
+  /* Do NOT await other supabase calls inside this callback.
+     supabase-js holds an internal auth lock while the handler runs, so a
+     query made here waits on a lock that only releases when the handler
+     returns — and signInAnonymously() never settles. That is why sign-in
+     used to hang on "creating an anonymous account…". Deferring the work
+     with setTimeout lets the lock release first. */
+  supabase.auth.onAuthStateChange((_event, next) => {
     session = next;
-    await loadProfile().catch((e) => console.warn('[synonym ladder]', e.message));
-    scoreboard.useRemote(driver);
+    setTimeout(() => {
+      loadProfile()
+        .catch((e) => console.warn('[synonym ladder] profile:', e.message))
+        .then(() => scoreboard.useRemote(driver));
+    }, 0);
   });
 
   const { data } = await supabase.auth.getSession();
   session = data.session;
-  if (session) await loadProfile().catch((e) => console.warn('[synonym ladder]', e.message));
+  // Safe to await here: we are outside the auth callback, so no lock is held.
+  if (session) await loadProfile().catch((e) => console.warn('[synonym ladder] profile:', e.message));
   scoreboard.useRemote(driver);
+  console.info('[synonym ladder] scoreboard connected' +
+    (session ? ' as ' + driver.identity().username : ' (signed out)'));
 }

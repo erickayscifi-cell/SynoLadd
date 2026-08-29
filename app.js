@@ -737,9 +737,18 @@
   });
   el.anon.addEventListener('click', function () {
     el.sheetNote.textContent = 'creating an anonymous account…';
+    // Never let the sheet sit on a progress message forever: say something
+    // useful if the call neither succeeds nor fails.
+    var stalled = setTimeout(function () {
+      el.sheetNote.textContent =
+        'still waiting on Supabase — check the browser console, then try again.';
+    }, 12000);
     scoreboard.signIn('anonymous').then(function () {
+      clearTimeout(stalled);
       el.sheet.hidden = true;
+      renderAccount();
     }, function (err) {
+      clearTimeout(stalled);
       el.sheetNote.textContent = err.message;
     });
   });
