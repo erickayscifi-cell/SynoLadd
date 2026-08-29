@@ -28,8 +28,30 @@ if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) {
 } else if (!scoreboard) {
   console.warn('[synonym ladder] scoreboard not ready; cloud driver idle.');
 } else {
+  /* By default supabase-js guards auth work with the cross-TAB Web Locks
+     API. If any other tab on this origin is holding that lock — including
+     one left open from an earlier session that hung — every auth call in
+     this tab waits forever with no error. That is a miserable failure mode
+     for a game people open in a second tab.
+
+     A per-page queue is not enough either: supabase-js acquires the lock
+     again for nested work, so a strict queue makes that inner call wait on
+     the lock its own caller is holding. Sign-in completed, the session
+     event fired, and the promise still never settled.
+
+     This page only ever runs one sign-in at a time, so the lock buys
+     nothing here. Pass straight through. The cost is that two tabs could
+     refresh the same token at once, which is harmless — the later refresh
+     simply wins. */
+  const noLock = (_name, _acquireTimeout, fn) => fn();
+
   const supabase = createClient(projectOrigin(cfg.supabaseUrl), cfg.supabaseAnonKey, {
-    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+      lock: noLock
+    }
   });
 
   let session = null;

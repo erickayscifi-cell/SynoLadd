@@ -80,6 +80,7 @@
     reason: null,        // 'limit' | 'stopped' | 'saved'
     filed: false,        // has this round been sent to the scoreboard?
     tickHandle: null,
+    signInWatchdog: null,
     // window focus tracking
     away: false,
     awayCount: 0,
@@ -693,9 +694,18 @@
     });
   }
 
+  /* Auth is an event, not a request. The sign-in promise has proven
+     unreliable to await — it can stay pending long after the session
+     exists — so the UI reacts to the session appearing instead. */
   scoreboard.onChange(function () {
     renderAccount();
     renderBoard();
+    var id = scoreboard.remoteIdentity();
+    if (id && id.signedIn && !el.sheet.hidden) {
+      clearTimeout(state.signInWatchdog);
+      el.sheet.hidden = true;
+      el.sheetNote.textContent = '';
+    }
   });
 
   el.boardBtn.addEventListener('click', function () {
@@ -732,23 +742,21 @@
   el.google.addEventListener('click', function () {
     el.sheetNote.textContent = 'redirecting to Google…';
     scoreboard.signIn('google').catch(function (err) {
+      // A provider that is not configured fails here rather than redirecting.
       el.sheetNote.textContent = err.message;
     });
   });
   el.anon.addEventListener('click', function () {
     el.sheetNote.textContent = 'creating an anonymous account…';
-    // Never let the sheet sit on a progress message forever: say something
-    // useful if the call neither succeeds nor fails.
-    var stalled = setTimeout(function () {
+    // The sheet is closed by the onChange handler above, when the session
+    // actually arrives. Here we only report failures and impose a deadline.
+    clearTimeout(state.signInWatchdog);
+    state.signInWatchdog = setTimeout(function () {
       el.sheetNote.textContent =
-        'still waiting on Supabase — check the browser console, then try again.';
+        'no session after 12 seconds — check the browser console, then try again.';
     }, 12000);
-    scoreboard.signIn('anonymous').then(function () {
-      clearTimeout(stalled);
-      el.sheet.hidden = true;
-      renderAccount();
-    }, function (err) {
-      clearTimeout(stalled);
+    scoreboard.signIn('anonymous').catch(function (err) {
+      clearTimeout(state.signInWatchdog);
       el.sheetNote.textContent = err.message;
     });
   });
