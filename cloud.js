@@ -28,29 +28,16 @@ if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) {
 } else if (!scoreboard) {
   console.warn('[synonym ladder] scoreboard not ready; cloud driver idle.');
 } else {
-  /* By default supabase-js guards auth work with the cross-TAB Web Locks
-     API. If any other tab on this origin is holding that lock — including
-     one left open from an earlier session that hung — every auth call in
-     this tab waits forever with no error. That is a miserable failure mode
-     for a game people open in a second tab.
-
-     A per-page queue is not enough either: supabase-js acquires the lock
-     again for nested work, so a strict queue makes that inner call wait on
-     the lock its own caller is holding. Sign-in completed, the session
-     event fired, and the promise still never settled.
-
-     This page only ever runs one sign-in at a time, so the lock buys
-     nothing here. Pass straight through. The cost is that two tabs could
-     refresh the same token at once, which is harmless — the later refresh
-     simply wins. */
-  const noLock = (_name, _acquireTimeout, fn) => fn();
-
+  /* No `lock` option on purpose. Older supabase-js guarded auth work with
+     the cross-tab Web Locks API, which could hang sign-in indefinitely;
+     current versions coordinate session refreshes without it and warn that
+     the option is deprecated. Passing nothing is now both the simplest and
+     the recommended choice. */
   const supabase = createClient(projectOrigin(cfg.supabaseUrl), cfg.supabaseAnonKey, {
     auth: {
       persistSession: true,
       autoRefreshToken: true,
-      detectSessionInUrl: true,
-      lock: noLock
+      detectSessionInUrl: true
     }
   });
 
@@ -61,6 +48,15 @@ if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) {
 
   function anonName(uid) {
     return 'anon-' + (uid || '').replace(/-/g, '').slice(0, 4);
+  }
+
+  /* Throw away a token that the server will no longer honour, so the next
+     click starts clean instead of repeating the same failure. */
+  async function discardSession(why) {
+    console.warn('[synonym ladder] ' + why + ' — signing out.');
+    session = null;
+    profile = null;
+    try { await supabase.auth.signOut({ scope: 'local' }); } catch (e) {}
   }
 
   async function loadProfile() {
@@ -102,6 +98,12 @@ if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) {
         profile = await attempt(clean + '-' + Math.random().toString(36).slice(2, 5));
       } else if (err.code === '23505') {
         throw new Error('“' + clean + '” is taken — try another.');
+      } else if (err.code === '23503') {
+        // 23503 = foreign key violation: this session's user is gone from
+        // auth.users (account deleted, project reset). The stored token is
+        // useless, so drop it rather than failing on every write.
+        await discardSession('the account this browser was signed in as no longer exists');
+        throw new Error('that session was for a deleted account — signed out, try again');
       } else {
         throw err;
       }
@@ -144,7 +146,7 @@ if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) {
         click_aways: record.click_aways, away_seconds: record.away_seconds,
         seconds: record.seconds, words: record.words,
         rung1: record.rung1, rung2: record.rung2, rung3: record.rung3, rung4: record.rung4,
-        found: record.found, tries: record.tries
+        found: record.found, tries: record.tries, metrics: record.metrics
       };
       const { error } = await supabase.from('rounds').upsert(row, { onConflict: 'id' });
       if (error) throw new Error(error.message);
@@ -211,7 +213,15 @@ if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) {
 
   const { data } = await supabase.auth.getSession();
   session = data.session;
-  // Safe to await here: we are outside the auth callback, so no lock is held.
+
+  /* getSession() only reads the token in this browser — it does not ask
+     whether that user still exists. getUser() does. Checking once at
+     startup turns "every write fails forever" into one clean sign-out. */
+  if (session) {
+    const { error: whoErr } = await supabase.auth.getUser();
+    if (whoErr) await discardSession('the stored session is no longer valid (' + whoErr.message + ')');
+  }
+
   if (session) await loadProfile().catch((e) => console.warn('[synonym ladder] profile:', e.message));
   scoreboard.useRemote(driver);
   console.info('[synonym ladder] scoreboard connected' +

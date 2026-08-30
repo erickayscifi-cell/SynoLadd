@@ -29,6 +29,7 @@ The three tiers are **simple**, **literary** and **erudite** — they describe t
 | `scoreboard.js` | Round records, the local driver, and the driver seam. No DOM. |
 | `cloud.js` | Supabase driver: Google + anonymous sign-in, shared board. Loaded only when configured. |
 | `supabase-schema.sql` | Tables, constraints, RLS policies, leaderboard view |
+| `supabase-promos.sql` | Writer submissions: table, eligibility policy, review queue. Run when ready. |
 | `about.html` | About-the-author page. Plain HTML, no scripts — edit by hand. |
 | `images/` | Portrait and book covers for the about page (`images/README.txt` has sizes) |
 | `test.js` | Engine tests against recorded API payloads (`node test.js`) |
@@ -112,6 +113,16 @@ Two views, matching how the game is meant to be used:
 - **Top scores, per tier** — one board each for simple, literary and erudite, showing each player's *best* round on that tier. Per-tier is deliberate: a score on *touch* and a score on *discordant* are not comparable, so a single global board would just rank people by which words they chose. One row per player keeps a strong player from filling the board.
 - **Your progress** — every round you have finished, newest first. This is the view that serves the training goal: watch the 1st-order count and points-per-entry climb on the same seed over weeks.
 
+Click any row to expand the full metrics for that round, along with the words found at each rung and the tries that missed. Rounds store their entire metrics blob (`rounds.metrics`), because graph density and language figures depend on the live thesaurus cache and cannot be recomputed from the word list afterwards. Rounds filed before that column existed still open — the app rebuilds the scoring tree and character stats from `found` and marks the rest unavailable rather than inventing it.
+
+### Click-aways, honestly
+
+The board shows an **away** column: how many times the window lost focus during a round, and for how long. It is worth having, and it is worth being careful about what it means.
+
+It cannot tell a thesaurus tab from a Slack notification, a phone call, or a laptop lid. It sees nothing at all if someone looks up words on a second device — which is the obvious way to cheat, and the one this misses entirely. So it is a signal about interruption, not evidence of dishonesty, and the note under the board says so to players.
+
+If competitive integrity ever matters more than it does now, the effective move is server-side verification of the score, not surveillance of the window. That path is already open: every round stores its `found` payload for exactly that purpose.
+
 ### Setting up Supabase
 
 1. Create a project at [supabase.com](https://supabase.com) (the free tier is plenty to start).
@@ -119,7 +130,7 @@ Two views, matching how the game is meant to be used:
 3. **Authentication → Providers → Google**: enable it, and paste in a Google OAuth client ID and secret from the [Google Cloud console](https://console.cloud.google.com/apis/credentials). Supabase shows you the callback URL to register there.
 4. **Authentication → Providers → Anonymous sign-ins**: enable, so people can play without an account.
 5. **Authentication → URL Configuration**: add your hosting URL to the redirect allow-list.
-6. **Project Settings → API**: copy the project URL and the `anon` **public** key into `config.js`.
+6. **Project Settings → API**: copy the Project URL and a browser-safe key into `config.js`. The URL is `https://<project-ref>.supabase.co` — the `.co` API host, not the `supabase.com/dashboard/project/<ref>` address you browse. For the key, either the newer **publishable** key (`sb_publishable_…`) or the legacy **anon public** JWT (`eyJ…`) works; they are interchangeable in the client, and legacy keys are being retired through 2026, so prefer publishable. Never the secret / `service_role` key.
 
 **"Enable automatic RLS" — yes, turn it on.** It installs an event trigger that runs `alter table … enable row level security` on any new table created in the `public` schema. It's redundant for this project's two tables (the schema enables RLS on both explicitly) and it's idempotent, so it changes nothing here — its value is the table you add in six months and forget to protect. A table with RLS on and no policies is unreadable rather than world-readable, which is the right way to fail.
 
@@ -160,6 +171,26 @@ Every editable spot is marked with an HTML comment. The three you'll use most:
 Images go in `images/` and are referenced as `images/yourfile.jpg`. A missing file just shows its alt text and the layout holds, so you can add covers one at a time without ever having a broken-looking page. `images/README.txt` lists the filenames the page expects and the sizes that look best.
 
 The page is linked from the game's header, and links back. If you'd rather it live at a nicer URL, most static hosts will serve `about.html` at `/about` automatically — Netlify, Vercel and Cloudflare Pages all do.
+
+## Writer submissions (planned)
+
+The point of the game is to gather readers and writers; the point of this is to find the ones worth promoting. Design decisions, so they don't get relitigated later:
+
+**Eligibility is participation, not rank.** A Google account (never anonymous) plus five finished rounds. Deliberately *not* tied to a leaderboard position: rank here measures fast thesaurus recall under a 20-entry cap, which is a different skill from writing a book worth reading, and the best novelist in the room may play a mediocre round. Tying a promotional slot to score would also attach a prize to a leaderboard whose scores are still computed in the browser and taken on trust — which is exactly how you invite cheating. Loosening the gate defuses that.
+
+**Promotion is editorial.** You read it, you decide, you paste it into `about.html` by hand. No automation, no ranking algorithm, no runtime rendering of user text.
+
+**Nothing submitted is public until you say so**, and that is enforced by Postgres rather than by the UI. `supabase-promos.sql` creates the table: a submitter may only ever insert or edit rows with status `pending`; the world can read only rows with status `featured`; approving happens from the dashboard, which bypasses RLS. There is deliberately no policy granting anyone the power to feature themselves. URLs are `https`-only at the database level, which rules out `javascript:` and `data:` links before they exist.
+
+The review queue and the promote/reject statements are at the bottom of that file, ready to paste.
+
+Order of work: **Google sign-in first** — it's the gate for all of this, since anonymous accounts can't submit. Then the `promos` table, then a small form in the scoreboard panel for eligible players.
+
+### Three things to sort before people arrive
+
+- **Disclosure.** Say on the About page that featured links are your editorial picks and nobody paid for them. If you ever add affiliate links, that disclosure stops being manners and becomes a legal requirement.
+- **A privacy note.** Rounds store a full payload and you have research intentions for the aggregate. Write down what's collected, that board rounds are public, that aggregate analysis may happen, and how someone gets their account deleted. Cheap now, awkward once there are accounts.
+- **Impersonation.** A Google sign-in proves an email, not authorship. Your manual review is the only check on "I wrote this" — worth knowing that's the job you're accepting.
 
 ## Word data
 

@@ -58,7 +58,14 @@
     boardThead: byId('board-thead'),
     boardTbody: byId('board-tbody'),
     boardNote: byId('board-note'),
+    runDetail: byId('run-detail'),
+    runTitle: byId('run-title'),
+    runWords: byId('run-words'),
+    runGroups: byId('run-groups'),
+    runHist: byId('run-hist'),
+    runClose: byId('btn-run-close'),
     rename: byId('btn-rename'),
+    signOut: byId('btn-signout'),
     summary: byId('summary'),
     summaryTitle: byId('summary-title'),
     overReason: byId('over-reason'),
@@ -90,6 +97,15 @@
 
   function byId(id) { return document.getElementById(id); }
 
+  /* Guarded wiring. A missing optional element used to throw here and take
+     the whole script down with it — one stale cached page and the game was
+     a blank screen. Scoreboard chrome is optional; the game is not. */
+  function on(node, event, handler) {
+    if (node) node.addEventListener(event, handler);
+    else console.warn('[synonym ladder] missing element for a ' + event + ' handler — skipped');
+  }
+  function show(node, visible) { if (node) node.hidden = !visible; }
+
   function tierName(tier) { return TIER_LABELS[tier] || tier; }
 
   /* ---------- scoreboard ------------------------------------------------
@@ -99,7 +115,7 @@
 
   var scoreboard = SB.createScoreboard({
     local: SB.createLocalDriver(safeStorage()),
-    cloudConfigured: !!(CFG.supabaseUrl && CFG.supabaseAnonKey)
+    cloudConfigured: !CFG.offlineOnly && !!(CFG.supabaseUrl && CFG.supabaseAnonKey)
   });
 
   // published so cloud.js can find it once it loads
@@ -274,7 +290,7 @@
     el.message.className = 'message' + (kind ? ' ' + kind : '');
   }
 
-  el.form.addEventListener('submit', function (e) {
+  on(el.form, 'submit', function (e) {
     e.preventDefault();
     if (!state.game || state.finished) return;
     var raw = el.guess.value;
@@ -463,9 +479,22 @@
   }
 
   function renderMetrics() {
-    if (el.metrics.hidden || !state.game) return;
-    var m = state.game.metrics();
-    var t = m.topology, l = m.linguistics, c = m.characters;
+    if (!el.metrics || el.metrics.hidden || !state.game) return;
+    renderMetricGroups(el.metricGroups, el.hist, state.game.metrics(), {
+      awayCount: state.awayCount,
+      away: state.away,
+      awaySeconds: state.awaySeconds
+    });
+  }
+
+  /* One renderer, two callers: the live panel during a round, and a stored
+     round opened from the scoreboard. `context` carries the numbers that
+     live outside the engine (click-aways). */
+  function renderMetricGroups(target, histTarget, m, context) {
+    if (!target || !m) return;
+    context = context || {};
+    var t = m.topology || {}, l = m.linguistics || {}, c = m.characters || {};
+    var away = context.awayCount;
 
     var groups = [
       ['play', [
@@ -478,9 +507,10 @@
         ['hit rate', m.hitRate, 'words that landed ÷ entries spent'],
         ['points per entry', m.pointsPerEntry, 'score ÷ entries spent'],
         ['same root, set aside', m.rootsSetAside, 'free — these never spent an entry'],
-        ['click-aways', state.awayCount + (state.away ? ' (away now)' : ''),
-          'times this window lost focus mid-round — another window, another tab, or the screen sleeping'],
-        ['time away', clock(state.awaySeconds), 'counted inside the clock, not deducted from it']
+        ['click-aways', (away === undefined ? '—' : away) + (context.away ? ' (away now)' : ''),
+          'times the window lost focus mid-round — another window, another tab, or the screen sleeping. It cannot see where the player went.'],
+        ['time away', context.awaySeconds === undefined ? '—' : clock(context.awaySeconds),
+          'counted inside the clock, not deducted from it']
       ]],
       ['graph', [
         ['nodes', t.nodes + ' (seed + ' + (t.nodes - 1) + ')', 'the seed plus every word found'],
@@ -526,8 +556,9 @@
       ]]
     ];
 
-    el.metricGroups.innerHTML = '';
+    target.innerHTML = '';
     groups.forEach(function (group) {
+      if (!group[1].length) return;
       var box = document.createElement('div');
       box.className = 'metric-group';
       var head = document.createElement('h3');
@@ -545,17 +576,18 @@
         dl.appendChild(dd);
       });
       box.appendChild(dl);
-      el.metricGroups.appendChild(box);
+      target.appendChild(box);
     });
 
-    renderHistogram(c.histogram);
+    renderHistogram(histTarget, c.histogram);
   }
 
-  function renderHistogram(hist) {
-    var lengths = Object.keys(hist).map(Number).sort(function (a, b) { return a - b; });
-    el.hist.innerHTML = '';
+  function renderHistogram(el2, hist) {
+    if (!el2) return;
+    var lengths = Object.keys(hist || {}).map(Number).sort(function (a, b) { return a - b; });
+    el2.innerHTML = '';
     if (!lengths.length) {
-      el.hist.textContent = '—';
+      el2.textContent = '—';
       return;
     }
     var peak = Math.max.apply(null, lengths.map(function (n) { return hist[n]; }));
@@ -578,7 +610,7 @@
       row.appendChild(label);
       row.appendChild(track);
       row.appendChild(value);
-      el.hist.appendChild(row);
+      el2.appendChild(row);
     }
   }
 
@@ -589,18 +621,31 @@
   function renderAccount() {
     var id = scoreboard.identity();
     var remote = scoreboard.remoteIdentity();
-    el.who.textContent = id.username || 'not signed in';
-    el.who.title = id.source === 'google' ? 'signed in with Google'
-      : id.source === 'anonymous' ? 'anonymous account — this device only'
-      : 'saved in this browser only';
+    if (el.who) {
+      el.who.textContent = id.username || 'not signed in';
+      el.who.title = id.source === 'google' ? 'signed in with Google'
+        : id.source === 'anonymous' ? 'anonymous account — this device only'
+        : 'this browser only — rounds are saved locally';
+    }
     // Only offer sign-in when there is something to sign in to.
-    el.signInBtn.hidden = !scoreboard.hasRemote() || (remote && remote.signedIn);
+    var signedIn = !!(remote && remote.signedIn);
+    show(el.signInBtn, scoreboard.hasRemote() && !signedIn);
+    show(el.signOut, signedIn);
   }
 
   function boardHeaders(view) {
     return view === 'me'
-      ? ['when', 'word', 'tier', 'score', '1st', 'entries', 'hit', 'pts/entry', 'time']
-      : ['#', 'player', 'score', 'word', '1st', 'entries', 'hit', 'pts/entry', 'time'];
+      ? ['when', 'word', 'tier', 'score', '1st', 'entries', 'hit', 'pts/entry', 'away', 'time']
+      : ['#', 'player', 'score', 'word', '1st', 'entries', 'hit', 'pts/entry', 'away', 'time'];
+  }
+
+  /* Click-aways shown plainly: a count, and how long in total. Deliberately
+     not styled as an accusation — see the note under the table. */
+  function awayCell(row) {
+    var n = row.click_aways;
+    if (n === null || n === undefined) return '—';
+    if (!n) return '0';
+    return n + (row.away_seconds ? ' · ' + clock(row.away_seconds) : '');
   }
 
   function renderBoard() {
@@ -612,6 +657,7 @@
       b.classList.toggle('active', b.dataset.board === boardView);
     });
 
+    if (el.runDetail) el.runDetail.hidden = true;   // detail belongs to the old view
     el.boardThead.innerHTML = '';
     var head = document.createElement('tr');
     boardHeaders(boardView).forEach(function (label) {
@@ -640,9 +686,14 @@
         if (r.username === me) tr.className = 'mine';
         var cells = boardView === 'me'
           ? [(r.played_at || '').slice(0, 10), r.seed, tierName(r.tier), r.score, r.rung1,
-             r.entries + '/' + r.entry_limit, r.hit_rate, r.points_per_entry, clock(r.seconds)]
+             r.entries + '/' + r.entry_limit, r.hit_rate, r.points_per_entry,
+             awayCell(r), clock(r.seconds)]
           : [i + 1, r.username, r.score, r.seed, r.rung1,
-             r.entries + '/' + r.entry_limit, r.hit_rate, r.points_per_entry, clock(r.seconds)];
+             r.entries + '/' + r.entry_limit, r.hit_rate, r.points_per_entry,
+             awayCell(r), clock(r.seconds)];
+        tr.className += ' clickable';
+        tr.title = 'open the full metrics for this round';
+        tr.addEventListener('click', function () { openRun(r); });
         cells.forEach(function (value, col) {
           var td = document.createElement('td');
           td.textContent = (value === null || value === undefined) ? '—' : value;
@@ -652,12 +703,95 @@
         });
         el.boardTbody.appendChild(tr);
       });
-      el.boardNote.textContent = boardView === 'me'
+      el.boardNote.innerHTML = (boardView === 'me'
         ? 'Your finished rounds, newest first. Watch 1st-order counts climb — that is the thesaurus recall improving.'
-        : 'Best round per player on ' + tierName(boardView) + ' words.';
+        : 'Best round per player on ' + tierName(boardView) + ' words.') +
+        ' Click any row for the full metrics. <em>Away</em> counts times the window lost focus — ' +
+        'an interruption and a second tab look identical, so read it as a signal, not proof.';
     }, function (err) {
       el.boardNote.textContent = 'Could not load the board: ' + err.message;
     });
+  }
+
+  /* ---------- one round, in full ----------------------------------------
+     Rounds store their whole metrics blob, so opening one is instant and
+     shows exactly what the player saw. Rounds filed before that existed
+     get what can honestly be rebuilt from the word list: the scoring tree
+     and the character stats. Graph density and language data needed the
+     live thesaurus cache, so those stay blank rather than guessed at. */
+
+  function rebuildMetrics(row) {
+    var found = row.found || [];
+    var lengths = found.map(function (e) { return e.word.length; });
+    var hist = {};
+    lengths.forEach(function (n) { hist[n] = (hist[n] || 0) + 1; });
+    var sorted = lengths.slice().sort(function (a, b) { return a - b; });
+    var mid = Math.floor(sorted.length / 2);
+    var byLength = found.slice().sort(function (a, b) { return a.word.length - b.word.length; });
+    var traces = found.map(function (e) { return e.depth; });
+    var rungs = { 1: row.rung1, 2: row.rung2, 3: row.rung3, 4: row.rung4 };
+
+    return {
+      score: row.score, rawScore: row.raw_score, penalty: row.penalty,
+      guesses: row.entries, guessLimit: row.entry_limit, guessesLeft: row.entries_left,
+      hitRate: row.hit_rate, pointsPerEntry: row.points_per_entry,
+      rootsSetAside: row.roots_set_aside,
+      topology: {
+        nodes: found.length + 1,
+        rungWidths: rungs,
+        meanTrace: traces.length
+          ? +(traces.reduce(function (a, b) { return a + b; }, 0) / traces.length).toFixed(2) : 0,
+        maxTrace: traces.length ? Math.max.apply(null, traces) : 0,
+        branching: { 1: null, 2: null, 3: null }
+      },
+      linguistics: { pos: {}, coverage: 'not stored' },
+      characters: {
+        boardChars: lengths.reduce(function (a, b) { return a + b; }, 0),
+        meanLength: lengths.length
+          ? +(lengths.reduce(function (a, b) { return a + b; }, 0) / lengths.length).toFixed(2) : null,
+        medianLength: sorted.length
+          ? (sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2) : null,
+        shortest: byLength.length ? byLength[0].word : null,
+        longest: byLength.length ? byLength[byLength.length - 1].word : null,
+        histogram: hist,
+        distinctInitials: Object.keys(found.reduce(function (acc, e) {
+          acc[e.word[0]] = 1; return acc;
+        }, {})).length,
+        distinctLetters: Object.keys(found.map(function (e) { return e.word; }).join('')
+          .split('').reduce(function (acc, c) { acc[c] = 1; return acc; }, {})).length
+      },
+      partial: true
+    };
+  }
+
+  function openRun(row) {
+    if (!el.runDetail) return;
+    var m = row.metrics || rebuildMetrics(row);
+
+    el.runTitle.textContent = '“' + row.seed + '” · ' + row.score + ' points · ' +
+      (row.username || 'you') + ' · ' + (row.played_at || '').slice(0, 10);
+
+    var byRung = [1, 2, 3, 4].map(function (d) {
+      var words = (row.found || []).filter(function (e) { return e.depth === d; })
+                                   .map(function (e) { return e.word; });
+      return words.length ? ORDINALS[d] + ': ' + words.join(', ') : null;
+    }).filter(Boolean);
+    var missed = (row.tries || []).filter(function (t) { return !t.resolved; })
+                                  .map(function (t) { return t.word; });
+    el.runWords.innerHTML = byRung.join(' &nbsp;·&nbsp; ') +
+      (missed.length ? '<br><span class="run-missed">tries: ' + missed.join(', ') + '</span>' : '');
+
+    renderMetricGroups(el.runGroups, el.runHist, m, {
+      awayCount: row.click_aways,
+      awaySeconds: row.away_seconds
+    });
+
+    el.runDetail.hidden = false;
+    if (m.partial) {
+      el.boardNote.textContent =
+        'This round was filed before full metrics were stored — graph and language figures are unavailable for it.';
+    }
+    el.runDetail.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
   function saveRound() {
@@ -701,14 +835,14 @@
     renderAccount();
     renderBoard();
     var id = scoreboard.remoteIdentity();
-    if (id && id.signedIn && !el.sheet.hidden) {
+    if (id && id.signedIn && el.sheet && !el.sheet.hidden) {
       clearTimeout(state.signInWatchdog);
       el.sheet.hidden = true;
-      el.sheetNote.textContent = '';
+      if (el.sheetNote) el.sheetNote.textContent = '';
     }
   });
 
-  el.boardBtn.addEventListener('click', function () {
+  on(el.boardBtn, 'click', function () {
     el.board.hidden = !el.board.hidden;
     el.boardBtn.classList.toggle('active', !el.board.hidden);
     if (!el.board.hidden) {
@@ -716,7 +850,7 @@
       renderBoard();
     }
   });
-  el.boardClose.addEventListener('click', function () {
+  on(el.boardClose, 'click', function () {
     el.board.hidden = true;
     el.boardBtn.classList.remove('active');
   });
@@ -726,27 +860,48 @@
       renderBoard();
     });
   });
-  el.rename.addEventListener('click', askUsername);
-  el.who.addEventListener('click', function () {
+  on(el.runClose, 'click', function () { el.runDetail.hidden = true; });
+  on(el.rename, 'click', askUsername);
+  on(el.signOut, 'click', function () {
+    scoreboard.signOut().then(function () {
+      renderAccount();
+      renderBoard();
+      el.boardNote.textContent = 'Signed out. Rounds are kept in this browser until you sign in again.';
+    });
+  });
+  on(el.who, 'click', function () {
     var remote = scoreboard.remoteIdentity();
-    if (scoreboard.hasRemote() && !(remote && remote.signedIn)) openSheet();
-    else askUsername();
+    if (scoreboard.hasRemote() && !(remote && remote.signedIn)) {
+      save('skip-signin', false);   // they asked for it this time
+      openSheet();
+    } else {
+      askUsername();
+    }
   });
 
   function openSheet() {
-    el.sheetNote.textContent = '';
+    if (!el.sheet) return;
+    if (el.sheetNote) el.sheetNote.textContent = '';
     el.sheet.hidden = false;
   }
-  el.signInBtn.addEventListener('click', openSheet);
-  el.sheetClose.addEventListener('click', function () { el.sheet.hidden = true; });
-  el.google.addEventListener('click', function () {
+
+  /* "Play without saving" is a real choice, remembered — the sheet should
+     never be a gate between someone and a word game. */
+  function dismissSheet() {
+    if (el.sheet) el.sheet.hidden = true;
+    clearTimeout(state.signInWatchdog);
+    save('skip-signin', true);
+  }
+  on(el.signInBtn, 'click', openSheet);
+  on(el.sheetClose, 'click', dismissSheet);
+  on(el.google, 'click', function () {
     el.sheetNote.textContent = 'redirecting to Google…';
     scoreboard.signIn('google').catch(function (err) {
       // A provider that is not configured fails here rather than redirecting.
       el.sheetNote.textContent = err.message;
     });
   });
-  el.anon.addEventListener('click', function () {
+  on(el.anon, 'click', function () {
     el.sheetNote.textContent = 'creating an anonymous account…';
     // The sheet is closed by the onChange handler above, when the session
     // actually arrives. Here we only report failures and impose a deadline.
@@ -870,7 +1025,7 @@
     });
   });
 
-  el.newWord.addEventListener('click', function () {
+  on(el.newWord, 'click', function () {
     stopTimer();
     startRound({
       mode: 'practice',
@@ -879,35 +1034,35 @@
     });
   });
 
-  el.finish.addEventListener('click', function () { finishRound(false); });
+  on(el.finish, 'click', function () { finishRound(false); });
 
-  el.again.addEventListener('click', function () {
+  on(el.again, 'click', function () {
     stopTimer();
     startRound({ mode: 'practice', tier: state.tier, word: randomWord(state.tier, state.game && state.game.seed) });
   });
 
-  el.copy.addEventListener('click', function () {
+  on(el.copy, 'click', function () {
     var text = shareText();
     var done = function () { el.copy.textContent = 'copied'; setTimeout(function () { el.copy.textContent = 'copy result'; }, 1600); };
     if (navigator.clipboard) navigator.clipboard.writeText(text).then(done, function () { window.prompt('Copy your result:', text); });
     else window.prompt('Copy your result:', text);
   });
 
-  el.rulesBtn.addEventListener('click', function () {
+  on(el.rulesBtn, 'click', function () {
     el.rules.hidden = !el.rules.hidden;
     el.rulesBtn.classList.toggle('active', !el.rules.hidden);
   });
-  el.rulesClose.addEventListener('click', function () {
+  on(el.rulesClose, 'click', function () {
     el.rules.hidden = true;
     el.rulesBtn.classList.remove('active');
   });
 
-  el.metricsBtn.addEventListener('click', function () {
+  on(el.metricsBtn, 'click', function () {
     el.metrics.hidden = !el.metrics.hidden;
     el.metricsBtn.classList.toggle('active', !el.metrics.hidden);
     renderMetrics();
   });
-  el.metricsClose.addEventListener('click', function () {
+  on(el.metricsClose, 'click', function () {
     el.metrics.hidden = true;
     el.metricsBtn.classList.remove('active');
   });

@@ -15,6 +15,7 @@
   <nav class="modes">
     <button type="button" class="link" data-mode="daily">daily</button>
     <button type="button" class="link" data-mode="practice">practice</button>
+    <button type="button" class="link" id="btn-board">scoreboard</button>
     <a class="link" href="about.html">about</a>
   </nav>
   <div class="bar-right">
@@ -34,13 +35,15 @@
 <div class="signin-sheet" id="signin-sheet" hidden>
   <div class="signin-card">
     <h2>Play on the scoreboard</h2>
-    <p>Sign in to keep your rounds and appear on the boards. Anonymous works the same way — you just can't recover the account on another device.</p>
+    <p>Sign in to keep your rounds and appear on the shared boards. Anonymous works the same way — you just can't recover the account on another device.</p>
     <div class="signin-actions">
       <button type="button" id="btn-google">continue with Google</button>
       <button type="button" class="link" id="btn-anon">play anonymously</button>
     </div>
     <p class="signin-note" id="signin-note"></p>
-    <button type="button" class="link" id="btn-signin-close">not now</button>
+    <hr class="signin-rule">
+    <button type="button" class="link" id="btn-signin-close">play without saving to the scoreboard</button>
+    <p class="signin-small">Your rounds stay in this browser. You can sign in later and they'll upload.</p>
   </div>
 </div>
 
@@ -111,7 +114,6 @@
 
   <section class="finish">
     <button type="button" class="link" id="btn-finish">finish round</button>
-    <button type="button" class="link" id="btn-board">scoreboard</button>
     <button type="button" class="link" id="btn-metrics">metrics</button>
     <button type="button" class="link" id="btn-rules">how it works</button>
   </section>
@@ -134,9 +136,25 @@
       </table>
     </div>
     <p class="board-note" id="board-note"></p>
+
+    <!-- Filled in when a row is clicked: the full metrics for that round. -->
+    <section class="run-detail" id="run-detail" hidden>
+      <div class="run-head">
+        <h3 id="run-title">Round detail</h3>
+        <button type="button" class="link" id="btn-run-close">close detail</button>
+      </div>
+      <p class="run-words" id="run-words"></p>
+      <div class="metric-groups" id="run-groups"></div>
+      <div class="hist-block">
+        <h3 class="metric-head">word length</h3>
+        <div class="hist" id="run-hist"></div>
+      </div>
+    </section>
+
     <div class="panel-actions">
       <button type="button" class="link" id="btn-board-close">close</button>
       <button type="button" class="link" id="btn-rename">change name</button>
+      <button type="button" class="link" id="btn-signout" hidden>sign out</button>
     </div>
   </section>
 
@@ -186,7 +204,7 @@
 <script>
   (function () {
     var c = window.SL_CONFIG || {};
-    if (!c.supabaseUrl || !c.supabaseAnonKey) return;
+    if (c.offlineOnly || !c.supabaseUrl || !c.supabaseAnonKey) return;
     var s = document.createElement('script');
     s.type = 'module';
     s.src = 'cloud.js';

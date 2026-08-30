@@ -23,6 +23,12 @@ window.SL_CONFIG = {
   // so prefer the publishable one. Never the secret / service_role key.
   supabaseAnonKey: 'sb_publishable_TXKtsw8z2eNz5ZFSY62uZQ_CVvJCeM4',
 
+  // Set true to ignore the credentials above and keep everything in the
+  // browser — no accounts, no sign-in sheet, no network calls but Datamuse.
+  // Useful for playtesting, or if the scoreboard is misbehaving and you
+  // just want the game.
+  offlineOnly: false,
+
   appVersion: '0.5',      // stored with each round, so old data stays readable
   boardSize: 25,          // rows shown per leaderboard
   historySize: 30         // of your own rounds shown in progress view

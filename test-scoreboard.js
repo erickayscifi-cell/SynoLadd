@@ -79,6 +79,9 @@ check('score equals raw minus penalty (the DB constraint)',
 check('keeps the word payload for later verification',
   record.found.length + ':' + record.found[0].word + '/' + record.found[0].parent, '9:contact/touch');
 check('keeps the tries payload', record.tries.map(function (t) { return t.word; }), ['banana', 'wobble']);
+check('keeps the whole metrics blob for the detail view',
+  [!!record.metrics, record.metrics.topology.rungWidths[1], record.metrics.hitRate],
+  [true, 5, 0.64]);
 check('an unplayed round is not worth keeping',
   SB.isWorthKeeping(SB.buildRecord(roundInput({ metrics: metricsFixture({ guesses: 0 }) }))), false);
 check('a played round is worth keeping', SB.isWorthKeeping(record), true);

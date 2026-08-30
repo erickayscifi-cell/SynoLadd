@@ -51,6 +51,12 @@
       rung3: counts[3] || 0,
       rung4: counts[4] || 0,
 
+      /* The whole metrics blob, so a finished round can be reopened later
+         showing exactly what the player saw. Graph and language figures
+         cannot be recomputed from the word list alone — they needed the
+         live thesaurus cache — so they are stored rather than derived. */
+      metrics: m,
+
       // --- payload kept so a round can be re-checked later ---
       found: input.found.map(function (e) {
         return { word: e.word, depth: e.depth, parent: e.parent, quality: e.quality };

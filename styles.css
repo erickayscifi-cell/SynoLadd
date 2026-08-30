@@ -28,6 +28,13 @@
 
 * { box-sizing: border-box; }
 
+/* The hidden attribute only hides because the browser's default stylesheet
+   says display:none — and ANY author display rule outranks that default.
+   Two elements here set display:flex, so hiding them silently did nothing:
+   the sign-in sheet stayed on screen no matter what the script did. Make
+   the attribute mean what it says, everywhere. */
+[hidden] { display: none !important; }
+
 body {
   margin: 0;
   background: var(--bg);
@@ -279,6 +286,8 @@ tbody tr:last-child td { padding-bottom: 14px; }
   color: #fff;
 }
 .signin-note { min-height: 1.2em; margin: 14px 0 0 !important; font-size: 0.85rem; }
+.signin-rule { margin: 18px 0 14px; border: 0; border-top: 1px solid var(--line); }
+.signin-small { margin: 6px 0 0 !important; font-size: 0.78rem; color: var(--muted); }
 
 /* ---- scoreboard ---- */
 .board-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
@@ -310,6 +319,20 @@ tbody tr:last-child td { padding-bottom: 14px; }
 .board-table td.strong { font-size: 1rem; }
 .board-table tr.mine td { background: rgba(31, 111, 107, 0.08); }
 .board-note { margin: 12px 0 0; font-size: 0.82rem; color: var(--muted); }
+.board-note em { font-style: normal; color: var(--fg); }
+.board-table tr.clickable { cursor: pointer; }
+.board-table tr.clickable:hover td { background: rgba(31, 111, 107, 0.06); }
+
+/* ---- one round, expanded ---- */
+.run-detail {
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 2px solid var(--accent);
+}
+.run-head { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+.run-head h3 { margin: 0 0 6px; font-size: 1rem; font-weight: 500; }
+.run-words { margin: 0 0 18px; font-size: 0.85rem; color: var(--muted); line-height: 1.7; }
+.run-missed { color: var(--miss); }
 
 /* ---- round over ---- */
 .panel.over {

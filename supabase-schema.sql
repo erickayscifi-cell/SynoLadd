@@ -76,6 +76,11 @@ create table if not exists public.rounds (
   found            jsonb not null,
   tries            jsonb,
 
+  -- the full metrics blob, so a stored round can be reopened in detail.
+  -- Graph and language figures depend on the live thesaurus cache and
+  -- cannot be recomputed from `found` alone, so they are kept here.
+  metrics          jsonb,
+
   created_at       timestamptz not null default now(),
 
   -- cheap sanity rails; real verification belongs in an Edge Function
@@ -108,6 +113,15 @@ create index if not exists rounds_user_played_idx on public.rounds (user_id, pla
 create index if not exists rounds_seed_score_idx  on public.rounds (seed, score desc);
 create index if not exists rounds_played_on_idx   on public.rounds (played_on);
 
+-- ---------- already ran this file before? ------------------------
+-- Adding a column to a live table. Safe to run repeatedly; existing rows
+-- keep a null metrics blob and the app rebuilds what it can from `found`.
+--
+--   alter table public.rounds add column if not exists metrics jsonb;
+--
+-- The view below also needs recreating to expose it, which the
+-- create-or-replace further down handles on its own.
+
 -- ---------- leaderboard: best round per player, per tier ----------
 -- One row per player keeps a single strong player from filling the board.
 -- security_invoker makes the view obey the caller's RLS, not the owner's.
@@ -119,6 +133,7 @@ select tier, user_id, username, is_anonymous, seed, mode,
        rung1, rung2, rung3, rung4,
        entries, entry_limit, entries_left, hit_rate, points_per_entry,
        roots_set_aside, click_aways, away_seconds, seconds,
+       found, tries, metrics,
        played_at, played_on
 from (
   select r.*,
