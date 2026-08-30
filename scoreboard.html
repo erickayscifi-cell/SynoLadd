@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scoreboard — Synonym Ladder</title>
+<meta name="description" content="Top scores and personal progress in Synonym Ladder.">
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='14'>🪜</text></svg>">
+</head>
+<!-- data-page tells app.js to run the board, not the game. -->
+<body data-page="board">
+
+<header class="bar">
+  <div class="brand">synonym ladder</div>
+  <nav class="modes">
+    <a class="link" href="index.html">play</a>
+    <a class="link active" href="scoreboard.html">scoreboard</a>
+    <a class="link" href="about.html">about</a>
+  </nav>
+  <div class="bar-right">
+    <span class="account" id="account">
+      <button type="button" class="link" id="btn-who" title="your scoreboard name">…</button>
+      <button type="button" class="link" id="btn-signin" hidden>sign in</button>
+    </span>
+  </div>
+</header>
+
+<div class="signin-sheet" id="signin-sheet" hidden>
+  <div class="signin-card">
+    <h2>Play on the scoreboard</h2>
+    <p>Sign in to keep your rounds and appear on the shared boards. Anonymous works the same way — you just can't recover the account on another device.</p>
+    <div class="signin-actions">
+      <button type="button" id="btn-google">continue with Google</button>
+      <button type="button" class="link" id="btn-anon">play anonymously</button>
+    </div>
+    <p class="signin-note" id="signin-note"></p>
+    <hr class="signin-rule">
+    <button type="button" class="link" id="btn-signin-close">not now</button>
+    <p class="signin-small">Your rounds stay in this browser. You can sign in later and they'll upload.</p>
+  </div>
+</div>
+
+<main class="board-page">
+
+  <section class="board-intro">
+    <h1>Scoreboard</h1>
+    <p>
+      Each tier board lists every player once, showing their best round on that tier.
+      <b>Your progress</b> is the other view: every round you have played, in order, across
+      all tiers. Scores only compare within a tier — a simple seed offers far more to find
+      than an erudite one, so a big number on <i>touch</i> says less than a modest one on
+      <i>obdurate</i>.
+    </p>
+  </section>
+
+  <section class="panel" id="board">
+    <div class="board-head">
+      <h2>Boards</h2>
+      <span class="board-where" id="board-where"></span>
+    </div>
+    <nav class="board-tabs" id="board-tabs">
+      <button type="button" class="chip" data-board="easy">simple</button>
+      <button type="button" class="chip" data-board="medium">literary</button>
+      <button type="button" class="chip" data-board="hard">erudite</button>
+      <button type="button" class="chip" data-board="me">your progress</button>
+    </nav>
+    <div class="board-scroll">
+      <table class="board-table" id="board-scores">
+        <thead id="board-thead"></thead>
+        <tbody id="board-tbody"></tbody>
+      </table>
+    </div>
+    <p class="board-note" id="board-note"></p>
+
+    <!-- Filled in when a row is clicked: the full metrics for that round. -->
+    <section class="run-detail" id="run-detail" hidden>
+      <div class="run-head">
+        <h3 id="run-title">Round detail</h3>
+        <button type="button" class="link" id="btn-run-close">close detail</button>
+      </div>
+      <p class="run-words" id="run-words"></p>
+      <div class="metric-groups" id="run-groups"></div>
+      <div class="hist-block">
+        <h3 class="metric-head">word length</h3>
+        <div class="hist" id="run-hist"></div>
+      </div>
+    </section>
+
+    <div class="panel-actions">
+      <button type="button" class="link" id="btn-rename">change name</button>
+      <button type="button" class="link" id="btn-signout" hidden>sign out</button>
+    </div>
+  </section>
+
+  <p class="back"><a href="index.html">← back to the game</a></p>
+
+</main>
+
+<footer class="foot">
+  <a href="privacy.html">privacy</a> ·
+  Word data from <a href="https://www.datamuse.com/api/" target="_blank" rel="noopener">Datamuse</a>.
+</footer>
+
+<script src="config.js"></script>
+<script src="words.js"></script>
+<script src="engine.js"></script>
+<script src="scoreboard.js"></script>
+<script src="app.js"></script>
+<!-- Loaded only when config.js carries Supabase credentials. -->
+<script>
+  (function () {
+    var c = window.SL_CONFIG || {};
+    if (c.offlineOnly || !c.supabaseUrl || !c.supabaseAnonKey) return;
+    var s = document.createElement('script');
+    s.type = 'module';
+    s.src = 'cloud.js';
+    document.body.appendChild(s);
+  })();
+</script>
+</body>
+</html>

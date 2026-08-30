@@ -14,6 +14,12 @@
   var ORDINALS = { 1: '1st', 2: '2nd', 3: '3rd', 4: '4th' };
   var STORE_PREFIX = 'synonym-ladder:';
 
+  /* One script, two pages. index.html plays; scoreboard.html shows the
+     boards. Both need the same identity handling and the same metrics
+     renderer, so they share this file rather than duplicating it, and each
+     page runs only the part it has markup for. */
+  var PAGE = (document.body && document.body.dataset.page) || 'game';
+
   var el = {
     seed: byId('seed'),
     seedLabel: byId('seed-label'),
@@ -50,9 +56,7 @@
     sheetNote: byId('signin-note'),
     google: byId('btn-google'),
     anon: byId('btn-anon'),
-    boardBtn: byId('btn-board'),
     board: byId('board'),
-    boardClose: byId('btn-board-close'),
     boardWhere: byId('board-where'),
     boardTabs: byId('board-tabs'),
     boardThead: byId('board-thead'),
@@ -102,7 +106,10 @@
      a blank screen. Scoreboard chrome is optional; the game is not. */
   function on(node, event, handler) {
     if (node) node.addEventListener(event, handler);
-    else console.warn('[synonym ladder] missing element for a ' + event + ' handler — skipped');
+    // Absent elements are normal now that the game and the board are
+    // separate pages sharing this file, so this is debug-level rather than
+    // a warning — visible when you go looking, silent otherwise.
+    else if (window.console && console.debug) console.debug('[synonym ladder] no element for a ' + event + ' handler');
   }
   function show(node, visible) { if (node) node.hidden = !visible; }
 
@@ -649,7 +656,7 @@
   }
 
   function renderBoard() {
-    if (el.board.hidden) return;
+    if (!el.board || el.board.hidden) return;
     var where = scoreboard.hasRemote() ? 'shared board' : 'this browser only';
     el.boardWhere.textContent = where + ' · ' + (scoreboard.identity().username || 'signed out');
 
@@ -704,8 +711,11 @@
         el.boardTbody.appendChild(tr);
       });
       el.boardNote.innerHTML = (boardView === 'me'
-        ? 'Your finished rounds, newest first. Watch 1st-order counts climb — that is the thesaurus recall improving.'
-        : 'Best round per player on ' + tierName(boardView) + ' words.') +
+        ? 'Every round you have finished, newest first, across all tiers. ' +
+          'Watch 1st-order counts climb — that is the thesaurus recall improving.'
+        : '<em>One row per player</em> — their single best round on ' + tierName(boardView) +
+          ' words, so nobody can fill the board. Your other ' + tierName(boardView) +
+          ' rounds are under “your progress”, and rounds on other tiers are on their own boards.') +
         ' Click any row for the full metrics. <em>Away</em> counts times the window lost focus — ' +
         'an interruption and a second tab look identical, so read it as a signal, not proof.';
     }, function (err) {
@@ -842,18 +852,7 @@
     }
   });
 
-  on(el.boardBtn, 'click', function () {
-    el.board.hidden = !el.board.hidden;
-    el.boardBtn.classList.toggle('active', !el.board.hidden);
-    if (!el.board.hidden) {
-      if (boardView !== 'me') boardView = state.tier;
-      renderBoard();
-    }
-  });
-  on(el.boardClose, 'click', function () {
-    el.board.hidden = true;
-    el.boardBtn.classList.remove('active');
-  });
+  // The board is a page of its own now: nothing to open or close.
   document.querySelectorAll('[data-board]').forEach(function (btn) {
     btn.addEventListener('click', function () {
       boardView = btn.dataset.board;
@@ -1105,16 +1104,24 @@
   // ---------- boot -------------------------------------------------
 
   var params = new URLSearchParams(location.search);
-  var forcedWord = SL.normalize(params.get('word') || '');
   var forcedTier = TIER_ALIASES[(params.get('tier') || '').toLowerCase()];
   if (forcedTier && WORDS[forcedTier]) state.tier = forcedTier;
 
   renderAccount();
 
-  if (forcedWord) {
-    startRound({ mode: 'practice', tier: state.tier, word: forcedWord });
+  if (PAGE === 'board') {
+    /* The scoreboard page: no puzzle, no timer. ?tier= picks the opening
+       board so a link can point at one. */
+    boardView = forcedTier || params.get('view') || 'hard';
+    if (boardView === 'mine') boardView = 'me';
+    renderBoard();
   } else {
-    var puzzle = dailyPuzzle();
-    startRound({ mode: 'daily', tier: puzzle.tier, word: puzzle.word });
+    var forcedWord = SL.normalize(params.get('word') || '');
+    if (forcedWord) {
+      startRound({ mode: 'practice', tier: state.tier, word: forcedWord });
+    } else {
+      var puzzle = dailyPuzzle();
+      startRound({ mode: 'daily', tier: puzzle.tier, word: puzzle.word });
+    }
   }
 })();
