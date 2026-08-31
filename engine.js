@@ -442,7 +442,8 @@
         var spot = placement(guess);
         var result = spot ? admit(guess, spot)
           : retry
-            ? reject('retry', '“' + guess + '” still links to nothing — no extra cost.')
+            ? reject('retry', '“' + guess + '” still links to nothing — no further points lost, ' +
+                              'but it spent an entry.')
             : charge(guess, 'miss', 'No link from “' + guess + '” to anything on the board.');
         result.left = guessesLeft();
         result.over = limitReached();

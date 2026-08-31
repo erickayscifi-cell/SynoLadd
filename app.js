@@ -118,6 +118,17 @@
 
   function tierName(tier) { return TIER_LABELS[tier] || tier; }
 
+  /* Which tier a word belongs to, from the bundled lists. The database
+     knows about far more words than these, so a null here means "not in
+     the fallback list" rather than "not a real seed". */
+  function tierOf(word) {
+    var found = null;
+    Object.keys(WORDS).forEach(function (tier) {
+      if (!found && WORDS[tier].indexOf(word) !== -1) found = tier;
+    });
+    return found;
+  }
+
   /* ---------- scoreboard ------------------------------------------------
      One facade, two drivers. Without Supabase credentials it keeps rounds
      in this browser; cloud.js registers itself when configured and the UI
@@ -430,9 +441,14 @@
         say(result.message, 'neutral');
         render();
       } else {
-        // Empty input, a phrase, a repeat, or a failed lookup: no charge.
-        say(result.message, 'no');
+        /* Empty input, a phrase, a duplicate, a failed lookup — or a RETRY
+           of a word already on the tries list. That last one costs no
+           points but does spend an entry, and this branch used to skip
+           render(), so the counter sat one too high until the next move
+           and the round ended with "1 entry left" showing. */
+        say(result.message + left(result), 'no');
         el.guess.select();
+        render();
       }
       persist();
       if (result.over) finishRound(false, 'limit');
@@ -1281,6 +1297,18 @@
   } else {
     var forcedWord = SL.normalize(params.get('word') || '');
     if (forcedWord) {
+      /* ?word= sets the word but not the difficulty, and a round filed
+         under the wrong tier lands on the wrong leaderboard — an erudite
+         word scoring against simple ones. Look the word up in the bundled
+         lists; say so plainly when it cannot be placed. */
+      var known = tierOf(forcedWord);
+      if (known) {
+        state.tier = known;
+      } else if (!params.get('tier')) {
+        console.warn('[synonym ladder] "' + forcedWord + '" is not in the bundled lists, so ' +
+          'this round will be filed as ' + tierName(state.tier) + '. Add &tier=erudite (or ' +
+          'simple / literary) to place it correctly.');
+      }
       startRound({ mode: 'practice', tier: state.tier, word: forcedWord });
     } else {
       // Wait briefly for cloud.js so the daily comes from the database
