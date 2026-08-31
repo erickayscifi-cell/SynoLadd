@@ -302,6 +302,23 @@
         e.points = cfg.points[d] || 0;
         e.quality = linkQuality(e.parent, e.word) || e.quality;
       });
+
+      /* Every route in from the rung above, not just the one BFS happened
+         to walk. When three first-order words all link to a second-order
+         one, any of them justifies its rung equally — naming only one is
+         arbitrary, and hides how connected the board really is. Recomputed
+         here so it grows with the board. */
+      found.forEach(function (e) {
+        var above = e.depth === 1
+          ? [seed]
+          : found.filter(function (f) { return f.depth === e.depth - 1; })
+                 .map(function (f) { return f.word; });
+        var linked = above.filter(function (w) { return !!linkQuality(w, e.word); });
+        // the scoring parent first, then the rest in board order
+        e.parents = (e.parent && linked.indexOf(e.parent) !== -1 ? [e.parent] : [])
+          .concat(linked.filter(function (w) { return w !== e.parent; }));
+        if (!e.parents.length && e.parent) e.parents = [e.parent];
+      });
     }
 
     /* Shallowest valid placement wins. */

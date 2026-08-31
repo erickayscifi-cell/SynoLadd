@@ -579,9 +579,18 @@
     wrap.appendChild(word);
 
     if (entry.depth > 1) {
+      /* Every word on the rung above that links to this one. They are
+         equally valid routes — the rung is the same whichever you follow —
+         so listing them shows how connected the board is rather than
+         implying one privileged parent. */
+      var parents = (entry.parents && entry.parents.length) ? entry.parents : [entry.parent];
       var from = document.createElement('span');
       from.className = 'from';
-      from.textContent = '← ' + entry.parent;
+      from.textContent = '← ' + parents.slice(0, 3).join(', ') +
+        (parents.length > 3 ? ' +' + (parents.length - 3) : '');
+      if (parents.length > 1) {
+        from.title = parents.length + ' routes in: ' + parents.join(', ');
+      }
       wrap.appendChild(from);
     }
     return wrap;

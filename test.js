@@ -347,6 +347,49 @@ game.start()
       });
   })
 
+  /* ---- every route in, not just the one BFS walked ----
+     On a real "stark" board, several first-order words all linked to the
+     same second-order one. Naming a single parent hid that. */
+  .then(function () {
+    console.log('\nall routes from the rung above');
+    var maps = {
+      stark:     { clear: { score: 40000000, syn: true },
+                   plain: { score: 40000000, syn: true },
+                   bare:  { score: 40000000, syn: true } },
+      clear:     { unclouded: { score: 30000000, syn: false },
+                   blinding:  { score: 30000000, syn: false } },
+      plain:     { blinding: { score: 30000000, syn: false } },
+      bare:      { blinding: { score: 30000000, syn: false } },
+      unclouded: {}, blinding: {}
+    };
+    var g = SL.createGame({
+      seed: 'stark',
+      fetcher: function (w) { return Promise.resolve(maps[w] || {}); },
+      infoFetcher: infoFetcher
+    });
+    function of(word) { return g.found().filter(function (e) { return e.word === word; })[0]; }
+
+    return g.start()
+      .then(function () { return g.submit('clear'); })
+      .then(function () { return g.submit('blinding'); })
+      .then(function () { return g.submit('unclouded'); })
+      .then(function () {
+        check('one route in is reported as one', of('blinding').parents, ['clear']);
+        check('a first-order word points at the seed', of('clear').parents, ['stark']);
+        return g.submit('plain');
+      })
+      .then(function () { return g.submit('bare'); })
+      .then(function () {
+        // slice() first: sort() would reorder the live array and break the
+        // ordering assertion below.
+        check('later finds add their routes',
+          of('blinding').parents.slice().sort(), ['bare', 'clear', 'plain']);
+        check('the scoring parent stays first', of('blinding').parents[0], 'clear');
+        check('extra routes do not change the rung', of('blinding').depth, 2);
+        check('a word with one route keeps one', of('unclouded').parents, ['clear']);
+      });
+  })
+
   /* ---- merging a second thesaurus ----
      Datamuse knows one synonym for "apocryphal"; Roget knows plenty. The
      merge has to add them without letting them outrank real synonyms. */
