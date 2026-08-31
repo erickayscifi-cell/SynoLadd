@@ -176,6 +176,33 @@ if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) {
       return data || [];
     },
 
+    /* Seed words live in a table with no select policy, reachable only
+       through these functions. One practice word at a time, and the daily
+       only for today — so the list cannot be dumped and tomorrow cannot be
+       read ahead. */
+    async practiceSeed(tier, exclude) {
+      const { data, error } = await supabase.rpc('practice_seed', {
+        p_tier: tier,
+        p_exclude: exclude || []
+      });
+      if (error) throw new Error(error.message);
+      return data || null;
+    },
+
+    /* Moby's entry for one word. The table has no select policy, so this
+       function is the only way in — one word at a time, never the corpus. */
+    async thesaurusLinks(word) {
+      const { data, error } = await supabase.rpc('related', { p_word: word });
+      if (error) throw new Error(error.message);
+      return data || null;
+    },
+
+    async dailySeed() {
+      const { data, error } = await supabase.rpc('daily_seed');
+      if (error) throw new Error(error.message);
+      return data || null;
+    },
+
     async signInWithGoogle() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -187,6 +214,32 @@ if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) {
     async signInAnonymously() {
       const { error } = await supabase.auth.signInAnonymously();
       if (error) throw new Error(error.message);
+    },
+
+    /* Attach Google to the anonymous account already in play, rather than
+       starting a new one. Same user id, so every round stays where it is —
+       this is what makes an account portable without inventing a recovery
+       code system. An email lands on file only at this moment, for the
+       people who deliberately ask for it. */
+    async linkGoogle() {
+      if (!session) throw new Error('nothing to link — play a round first');
+      if (!session.user.is_anonymous) throw new Error('this account is already linked to Google');
+      const { error } = await supabase.auth.linkIdentity({
+        provider: 'google',
+        options: { redirectTo: window.location.origin + window.location.pathname }
+      });
+      if (error) throw new Error(error.message);
+    },
+
+    /* Removes the person, keeps the play. See supabase-account.sql. */
+    async deleteAccount() {
+      if (!session) throw new Error('not signed in');
+      const { data, error } = await supabase.rpc('delete_my_account');
+      if (error) throw new Error(error.message);
+      await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+      session = null;
+      profile = null;
+      return data;
     },
 
     async signOut() {

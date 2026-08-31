@@ -22,6 +22,11 @@
     fetchMax: 250,
     // Safety net for unusual words whose whole response sits below minScore.
     fallbackKeep: 40,
+    /* Moby Thesaurus links land here: comfortably above minScore so they
+       count, well below strongScore so they read as loose. Roget lists
+       related terms rather than strict synonyms, and the amber dot should
+       say so. */
+    mobyScore: 25000000,
     // Cost of a word that links to nothing: a miss or a misspelling.
     // Words sharing a root with the board are free - see the roots bucket.
     missPenalty: 1,
@@ -163,6 +168,21 @@
     kept.forEach(function (row) {
       var prev = out[row.word];
       if (!prev || row.score > prev.score) out[row.word] = { score: row.score, syn: row.syn };
+    });
+    return out;
+  }
+
+  /* Fold a plain word list — Moby's, say — into a Datamuse-shaped map.
+     Anything Datamuse already knows keeps its own score, because that
+     score carries the strong/loose distinction; anything new arrives as a
+     loose link. Multi-word entries are dropped, as everywhere else. */
+  function mergeRelated(base, words) {
+    var out = {};
+    Object.keys(base || {}).forEach(function (w) { out[w] = base[w]; });
+    (words || []).forEach(function (raw) {
+      var w = normalize(raw);
+      if (!w || w.indexOf(' ') !== -1) return;
+      if (!out[w]) out[w] = { score: CONFIG.mobyScore, syn: false, moby: true };
     });
     return out;
   }
@@ -730,6 +750,8 @@
     createGame: createGame,
     parseRelated: parseRelated,
     parseInfo: parseInfo,
+    mergeRelated: mergeRelated,
+    defaultFetcher: defaultFetcher,   // so callers can compose with it
     normalize: normalize,
     stem: stem,
     isVariant: isVariant,

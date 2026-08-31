@@ -70,6 +70,9 @@
     runClose: byId('btn-run-close'),
     rename: byId('btn-rename'),
     signOut: byId('btn-signout'),
+    linkGoogle: byId('btn-link-google'),
+    deleteAccount: byId('btn-delete'),
+    accountNote: byId('account-note'),
     summary: byId('summary'),
     summaryTitle: byId('summary-title'),
     overReason: byId('over-reason'),
@@ -128,6 +131,21 @@
   // published so cloud.js can find it once it loads
   window.SLGame = { scoreboard: scoreboard };
 
+  /* cloud.js is a module and lands after this script. The daily word now
+     comes from the database, so the first render waits for it — but only
+     briefly: a slow CDN should cost a less-surprising word, never a
+     game that will not start. */
+  var cloudReady = (function () {
+    if (CFG.offlineOnly || !CFG.supabaseUrl || !CFG.supabaseAnonKey) return Promise.resolve(false);
+    return new Promise(function (resolve) {
+      var settled = false;
+      function finish(ok) { if (!settled) { settled = true; resolve(ok); } }
+      scoreboard.onChange(function () { if (scoreboard.hasRemote()) finish(true); });
+      if (scoreboard.hasRemote()) finish(true);
+      setTimeout(function () { finish(false); }, 3000);
+    });
+  })();
+
   function safeStorage() {
     try {
       window.localStorage.setItem('synonym-ladder:probe', '1');
@@ -179,9 +197,82 @@
     return { key: key, tier: tier, word: list[hash(key + tier) % list.length] };
   }
 
+  /* ---------- choosing a seed -------------------------------------------
+     With Supabase configured the words come from a table the client cannot
+     read, one at a time. Without it, from the fallback list in words.js.
+     Either way the last dozen are avoided: a 16-word pool drawn WITH
+     replacement is what made practice feel repetitive, not bad randomness. */
+
+  var RECENT_KEPT = 12;
+
+  function recentSeeds(tier) {
+    var list = load('recent:' + tier);
+    return Array.isArray(list) ? list : [];
+  }
+
+  function rememberSeed(tier, word) {
+    var list = recentSeeds(tier).filter(function (w) { return w !== word; });
+    list.unshift(word);
+    save('recent:' + tier, list.slice(0, RECENT_KEPT));
+  }
+
+  // crypto randomness, not a fingerprint: a fingerprint is stable per
+  // browser, which would make draws more correlated, not less.
+  function randomIndex(n) {
+    if (n <= 0) return 0;
+    if (window.crypto && window.crypto.getRandomValues) {
+      var a = new Uint32Array(1);
+      window.crypto.getRandomValues(a);
+      return a[0] % n;
+    }
+    return Math.floor(Math.random() * n);
+  }
+
   function randomWord(tier, avoid) {
-    var list = WORDS[tier].filter(function (w) { return w !== avoid; });
-    return list[Math.floor(Math.random() * list.length)];
+    var recent = recentSeeds(tier).concat(avoid ? [avoid] : []);
+    var fresh = WORDS[tier].filter(function (w) { return recent.indexOf(w) === -1; });
+    var list = fresh.length ? fresh : WORDS[tier];
+    return list[randomIndex(list.length)];
+  }
+
+  /* Ask the database first; fall back to the bundled list on any failure,
+     so a hiccup costs a less-surprising word rather than a broken game. */
+  function choosePracticeWord(tier, avoid) {
+    return scoreboard.practiceSeed(tier, recentSeeds(tier).concat(avoid ? [avoid] : []))
+      .then(function (word) { return word || randomWord(tier, avoid); },
+            function (err) {
+              console.warn('[synonym ladder] practice seed lookup failed:', err && err.message);
+              return randomWord(tier, avoid);
+            });
+  }
+
+  function chooseDaily() {
+    return scoreboard.dailySeed().then(function (pick) {
+      if (pick && pick.word && WORDS[pick.tier]) return pick;
+      return dailyPuzzle();
+    }, function (err) {
+      console.warn('[synonym ladder] daily seed lookup failed:', err && err.message);
+      return dailyPuzzle();
+    });
+  }
+
+  /* ---------- looking a word up -----------------------------------------
+     Datamuse and Moby answer at the same time, and the results merge:
+     Datamuse decides what counts as a strong link, Moby fills in the words
+     it has never heard of. Both are allowed to fail — a round with one
+     source is worse than a round with two, but a round with none is over. */
+  function lookUpWord(word) {
+    var datamuse = SL.defaultFetcher(word).catch(function (err) {
+      console.warn('[synonym ladder] datamuse lookup failed for "' + word + '":', err && err.message);
+      return {};
+    });
+    var moby = scoreboard.thesaurusLinks(word).catch(function (err) {
+      console.warn('[synonym ladder] thesaurus lookup failed for "' + word + '":', err && err.message);
+      return null;
+    });
+    return Promise.all([datamuse, moby]).then(function (both) {
+      return SL.mergeRelated(both[0], both[1]);
+    });
   }
 
   // ---------- round lifecycle --------------------------------------
@@ -198,7 +289,9 @@
     state.awaySeconds = 0;
     state.awaySince = null;
     state.elapsed = opts.elapsed || 0;
-    state.game = SL.createGame({ seed: opts.word });
+    state.game = SL.createGame({ seed: opts.word, fetcher: lookUpWord });
+    // so the next draw can avoid it, wherever the word came from
+    rememberSeed(opts.tier, opts.word);
 
     el.seed.textContent = opts.word;
     el.seedLabel.textContent = opts.mode === 'daily'
@@ -629,15 +722,26 @@
     var id = scoreboard.identity();
     var remote = scoreboard.remoteIdentity();
     if (el.who) {
-      el.who.textContent = id.username || 'not signed in';
+      var offline = id.source === 'local';
+      // Signed out should look signed out, not like a working account.
+      el.who.textContent = (offline ? 'guest · ' : '') + (id.username || 'not signed in');
+      el.who.classList.toggle('guest', offline);
       el.who.title = id.source === 'google' ? 'signed in with Google'
         : id.source === 'anonymous' ? 'anonymous account — this device only'
-        : 'this browser only — rounds are saved locally';
+        : 'not signed in — rounds stay in this browser and never reach the scoreboard';
     }
     // Only offer sign-in when there is something to sign in to.
     var signedIn = !!(remote && remote.signedIn);
     show(el.signInBtn, scoreboard.hasRemote() && !signedIn);
     show(el.signOut, signedIn);
+    // Linking is only meaningful for an anonymous account that exists.
+    show(el.linkGoogle, signedIn && remote.source === 'anonymous');
+    show(el.deleteAccount, signedIn);
+    if (el.accountNote && signedIn) {
+      el.accountNote.textContent = remote.source === 'anonymous'
+        ? 'This account lives in this browser only. Linking Google keeps it — and your rounds — on other devices.'
+        : 'Signed in with Google. Your email is never shown on the boards.';
+    }
   }
 
   function boardHeaders(view) {
@@ -657,7 +761,14 @@
 
   function renderBoard() {
     if (!el.board || el.board.hidden) return;
-    var where = scoreboard.hasRemote() ? 'shared board' : 'this browser only';
+    /* Say plainly which store is being read. "Shared board" while signed
+       out was misleading: the tier boards were shared, but your own rounds
+       were coming from this browser. */
+    var remote = scoreboard.remoteIdentity();
+    var signedIn = !!(remote && remote.signedIn);
+    var where = boardView === 'me'
+      ? (signedIn ? 'your rounds · saved to your account' : 'your rounds · this browser only')
+      : (scoreboard.hasRemote() ? 'shared board' : 'this browser only');
     el.boardWhere.textContent = where + ' · ' + (scoreboard.identity().username || 'signed out');
 
     document.querySelectorAll('[data-board]').forEach(function (b) {
@@ -683,7 +794,7 @@
     job.then(function (rows) {
       if (!rows.length) {
         el.boardNote.textContent = boardView === 'me'
-          ? 'No finished rounds yet. Play one and it lands here.'
+          ? 'No finished rounds yet. A round lands here once you finish it — either by using all 20 entries or by pressing “finish round”.'
           : 'No scores on this board yet — be first.';
         return;
       }
@@ -716,8 +827,7 @@
         : '<em>One row per player</em> — their single best round on ' + tierName(boardView) +
           ' words, so nobody can fill the board. Your other ' + tierName(boardView) +
           ' rounds are under “your progress”, and rounds on other tiers are on their own boards.') +
-        ' Click any row for the full metrics. <em>Away</em> counts times the window lost focus — ' +
-        'an interruption and a second tab look identical, so read it as a signal, not proof.';
+        ' Click any row for the full metrics. <em>Away</em> counts times the window lost focus.';
     }, function (err) {
       el.boardNote.textContent = 'Could not load the board: ' + err.message;
     });
@@ -820,9 +930,19 @@
       appVersion: CFG.appVersion
     });
     scoreboard.save(record).then(function (result) {
-      if (result.stored === 'cloud') el.boardNote.textContent = 'Round filed to the scoreboard.';
+      // The game page has no board note — this used to throw here, after
+      // the round had already been filed, which made a successful save look
+      // like a failure in the console.
+      if (el.boardNote && result.stored === 'cloud') {
+        el.boardNote.textContent = 'Round filed to the scoreboard.';
+      }
+      if (result.stored === 'local' && scoreboard.hasRemote()) {
+        say('Round saved in this browser — sign in and it will upload.', 'neutral');
+      }
       renderBoard();
-    }, function () {});
+    }).catch(function (err) {
+      console.warn('[synonym ladder] could not file the round:', err && err.message);
+    });
   }
 
   function askUsername() {
@@ -860,6 +980,35 @@
     });
   });
   on(el.runClose, 'click', function () { el.runDetail.hidden = true; });
+
+  on(el.linkGoogle, 'click', function () {
+    el.accountNote.textContent = 'redirecting to Google…';
+    scoreboard.linkGoogle().catch(function (err) {
+      el.accountNote.textContent = err.message;
+    });
+  });
+
+  /* Two steps on purpose: this is the one irreversible button on the site. */
+  on(el.deleteAccount, 'click', function () {
+    var mine = scoreboard.identity().username;
+    var ok = window.confirm(
+      'Delete the account “' + mine + '”?\n\n' +
+      'Your account and the name you played under are removed for good. Your rounds ' +
+      'stay in the anonymous totals under a fresh random tag that cannot be traced ' +
+      'back to you — they leave the boards and cannot be recovered.\n\n' +
+      'This cannot be undone.');
+    if (!ok) return;
+    el.accountNote.textContent = 'deleting…';
+    scoreboard.deleteAccount().then(function (result) {
+      var n = result && result.rounds_detached;
+      el.accountNote.textContent = 'Account deleted' +
+        (typeof n === 'number' ? ' — ' + n + ' round' + (n === 1 ? '' : 's') + ' detached and anonymised.' : '.');
+      renderAccount();
+      renderBoard();
+    }, function (err) {
+      el.accountNote.textContent = 'Could not delete: ' + err.message;
+    });
+  });
   on(el.rename, 'click', askUsername);
   on(el.signOut, 'click', function () {
     scoreboard.signOut().then(function () {
@@ -938,11 +1087,19 @@
       : '“' + state.game.seed + '” — ' + score + ' points';
 
     var limit = state.game.config.guessLimit;
-    el.overReason.textContent = state.reason === 'limit'
+    var why = state.reason === 'limit'
       ? 'All ' + limit + ' entries used.'
       : state.reason === 'stopped'
         ? 'You called it after ' + state.game.guesses() + ' of ' + limit + ' entries.'
         : 'Saved from an earlier session.';
+
+    /* The moment a signed-out player has something worth keeping is the
+       moment to mention that it is not being kept. */
+    var remote = scoreboard.remoteIdentity();
+    if (scoreboard.hasRemote() && !(remote && remote.signedIn)) {
+      why += ' Kept in this browser only — sign in and this round uploads with it.';
+    }
+    el.overReason.textContent = why;
 
     el.summaryGrid.innerHTML = '';
     addStat('score', score);
@@ -1004,40 +1161,46 @@
 
   // ---------- controls --------------------------------------------
 
+  /* Every practice start goes through here: ask the database, fall back to
+     the bundled list, then begin. The seed arrives asynchronously now. */
+  function startPractice(tier, avoid) {
+    stopTimer();
+    say('Choosing a word…');
+    choosePracticeWord(tier, avoid).then(function (word) {
+      startRound({ mode: 'practice', tier: tier, word: word });
+    });
+  }
+
+  function startDaily() {
+    stopTimer();
+    say('Loading today\u2019s word…');
+    chooseDaily().then(function (p) {
+      startRound({ mode: 'daily', tier: p.tier, word: p.word });
+    });
+  }
+
   document.querySelectorAll('[data-mode]').forEach(function (btn) {
     btn.addEventListener('click', function () {
-      stopTimer();
-      if (btn.dataset.mode === 'daily') {
-        var p = dailyPuzzle();
-        startRound({ mode: 'daily', tier: p.tier, word: p.word });
-      } else {
-        startRound({ mode: 'practice', tier: state.tier, word: randomWord(state.tier) });
-      }
+      if (btn.dataset.mode === 'daily') startDaily();
+      else startPractice(state.tier);
     });
   });
 
   document.querySelectorAll('[data-tier]').forEach(function (btn) {
     btn.addEventListener('click', function () {
       state.tier = btn.dataset.tier;
-      stopTimer();
-      startRound({ mode: 'practice', tier: state.tier, word: randomWord(state.tier) });
+      startPractice(state.tier);
     });
   });
 
   on(el.newWord, 'click', function () {
-    stopTimer();
-    startRound({
-      mode: 'practice',
-      tier: state.tier,
-      word: randomWord(state.tier, state.game && state.game.seed)
-    });
+    startPractice(state.tier, state.game && state.game.seed);
   });
 
   on(el.finish, 'click', function () { finishRound(false); });
 
   on(el.again, 'click', function () {
-    stopTimer();
-    startRound({ mode: 'practice', tier: state.tier, word: randomWord(state.tier, state.game && state.game.seed) });
+    startPractice(state.tier, state.game && state.game.seed);
   });
 
   on(el.copy, 'click', function () {
@@ -1120,8 +1283,9 @@
     if (forcedWord) {
       startRound({ mode: 'practice', tier: state.tier, word: forcedWord });
     } else {
-      var puzzle = dailyPuzzle();
-      startRound({ mode: 'daily', tier: puzzle.tier, word: puzzle.word });
+      // Wait briefly for cloud.js so the daily comes from the database
+      // rather than the fallback list; a slow CDN must not block the game.
+      cloudReady.then(startDaily);
     }
   }
 })();

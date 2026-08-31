@@ -93,8 +93,12 @@
     function identity() {
       var saved = read(STORE_IDENTITY, null);
       if (saved && saved.username) return saved;
+      /* "guest-", never "player-" or "anon-": this name exists only in this
+         browser and will never appear in the database. A signed-in
+         anonymous account is "anon-xxxx". The two used to look alike, which
+         made a signed-out session read as a working account. */
       var fresh = {
-        username: 'player-' + Math.random().toString(36).slice(2, 6),
+        username: 'guest-' + Math.random().toString(36).slice(2, 6),
         source: 'local',
         signedIn: false
       };
@@ -239,6 +243,26 @@
       signOut: function () {
         return remote ? remote.signOut() : Promise.resolve();
       },
+      thesaurusLinks: function (word) {
+        if (!remote || !remote.thesaurusLinks) return Promise.resolve(null);
+        return remote.thesaurusLinks(word);
+      },
+      practiceSeed: function (tier, exclude) {
+        if (!remote || !remote.practiceSeed) return Promise.resolve(null);
+        return remote.practiceSeed(tier, exclude);
+      },
+      dailySeed: function () {
+        if (!remote || !remote.dailySeed) return Promise.resolve(null);
+        return remote.dailySeed();
+      },
+      linkGoogle: function () {
+        if (!remote || !remote.linkGoogle) return Promise.reject(new Error('no scoreboard service configured'));
+        return remote.linkGoogle();
+      },
+      deleteAccount: function () {
+        if (!remote || !remote.deleteAccount) return Promise.reject(new Error('no scoreboard service configured'));
+        return remote.deleteAccount().then(function (result) { notify(); return result; });
+      },
 
       save: function (record) {
         if (!isWorthKeeping(record)) return Promise.resolve({ stored: 'skipped' });
@@ -263,8 +287,13 @@
         });
       },
 
+      // The shared board is public: read it from the cloud even signed out.
       topByTier: function (tier, limit) { return active().topByTier(tier, limit); },
-      myRounds: function (limit) { return active().myRounds(limit); },
+
+      /* Your own history must come from wherever your rounds actually are.
+         Reading it from the cloud while signed out returned an empty list
+         and hid rounds that were sitting in this browser all along. */
+      myRounds: function (limit) { return whoDriver().myRounds(limit); },
       flush: flush,
       onChange: function (fn) { listeners.push(fn); },
       driverName: function () { return active().name; }

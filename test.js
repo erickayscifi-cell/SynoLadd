@@ -347,6 +347,64 @@ game.start()
       });
   })
 
+  /* ---- merging a second thesaurus ----
+     Datamuse knows one synonym for "apocryphal"; Roget knows plenty. The
+     merge has to add them without letting them outrank real synonyms. */
+  .then(function () {
+    console.log('\nmerging Moby with Datamuse');
+    var datamuse = SL.parseRelated([
+      { word: 'questionable', score: 39939535, tags: ['syn', 'adj'] },
+      { word: 'apostrophal', score: 20024944, tags: ['adj'] }
+    ]);
+    var moby = ['spurious', 'fictitious', 'dubious', 'questionable',
+                'out of the question', 'UNAUTHENTIC'];
+    var merged = SL.mergeRelated(datamuse, moby);
+
+    check('keeps what Datamuse already knew',
+      merged.questionable.syn, true);
+    check('a strong link is not downgraded by the merge',
+      merged.questionable.score, 39939535);
+    check('adds words Datamuse never heard of',
+      ['spurious', 'fictitious', 'dubious'].every(function (w) { return !!merged[w]; }), true);
+    check('added words are loose, not strong',
+      [merged.spurious.syn, merged.spurious.score < SL.CONFIG.strongScore], [false, true]);
+    check('added words still clear the acceptance floor',
+      merged.spurious.score >= SL.CONFIG.minScore, true);
+    check('they are marked as coming from the thesaurus',
+      merged.spurious.moby, true);
+    check('multi-word entries are dropped', merged['out of the question'], undefined);
+    check('case is normalised', !!merged.unauthentic, true);
+    check('the low-band tail survives untouched', merged.apostrophal.score, 20024944);
+
+    var empty = SL.mergeRelated(datamuse, null);
+    check('a missing thesaurus answer changes nothing',
+      Object.keys(empty).sort(), ['apostrophal', 'questionable']);
+    check('merging into nothing still works',
+      Object.keys(SL.mergeRelated(null, ['alpha', 'beta'])).sort(), ['alpha', 'beta']);
+  })
+
+  /* The point of all that: a word the game used to reject now lands. */
+  .then(function () {
+    var thin = { questionable: { score: 39939535, syn: true } };
+    var game = SL.createGame({
+      seed: 'apocryphal',
+      infoFetcher: infoFetcher,
+      fetcher: function (w) {
+        if (w === 'apocryphal') {
+          return Promise.resolve(SL.mergeRelated(thin, ['spurious', 'fictitious', 'dubious']));
+        }
+        return Promise.resolve({});
+      }
+    });
+    return game.start()
+      .then(function () { return game.submit('spurious'); })
+      .then(function (r) {
+        check('"spurious" now lands on apocryphal',
+          { status: r.status, depth: r.entry && r.entry.depth, quality: r.entry && r.entry.quality },
+          { status: 'accepted', depth: 1, quality: 'loose' });
+      });
+  })
+
   // ---- request discipline: one lookup per distinct word, per game ----
   .then(function () {
     var log = [];

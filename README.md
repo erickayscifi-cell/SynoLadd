@@ -31,6 +31,9 @@ The three tiers are **simple**, **literary** and **erudite** — they describe t
 | `scoreboard.js` | Round records, the local driver, and the driver seam. No DOM. |
 | `cloud.js` | Supabase driver: Google + anonymous sign-in, shared board. Loaded only when configured. |
 | `supabase-schema.sql` | Tables, constraints, RLS policies, leaderboard view |
+| `supabase-seeds.sql` | Seed words in the database, unreadable by the client. Run to move the word list off GitHub. |
+| `supabase-thesaurus.sql` | Moby Thesaurus II in Postgres, merged with Datamuse at lookup time |
+| `supabase-account.sql` | Self-service account deletion; rounds survive, detached and relabelled |
 | `supabase-promos.sql` | Writer submissions: table, eligibility policy, review queue. Run when ready. |
 | `about.html` | About-the-author page. Plain HTML, no scripts — edit by hand. |
 | `images/` | Portrait and book covers for the about page (`images/README.txt` has sizes) |
@@ -194,6 +197,59 @@ Order of work: **Google sign-in first** — it's the gate for all of this, since
 - **Disclosure.** Say on the About page that featured links are your editorial picks and nobody paid for them. If you ever add affiliate links, that disclosure stops being manners and becomes a legal requirement.
 - **A privacy note.** Rounds store a full payload and you have research intentions for the aggregate. Write down what's collected, that board rounds are public, that aggregate analysis may happen, and how someone gets their account deleted. Cheap now, awkward once there are accounts.
 - **Impersonation.** A Google sign-in proves an email, not authorship. Your manual review is the only check on "I wrote this" — worth knowing that's the job you're accepting.
+
+## Seed words
+
+`words.js` ships 16 per tier as a fallback. Run `supabase-seeds.sql` and the real list moves into a `seeds` table you can extend with SQL, invisible to anyone reading the repo.
+
+The part that makes that work: **the table has no select policy.** The anon key is public, so a table the client can select from is a table anyone can dump. Access is through two `security definer` functions instead — `practice_seed(tier, exclude[])` returns one random word, and `daily_seed()` returns today's and takes no date argument, so nobody can ask what tomorrow holds. Today's pick is recorded in `daily_picks`, which also lets you schedule a specific day by hand.
+
+Adding words is then a single insert, live immediately, with nothing to deploy:
+
+```sql
+insert into public.seeds (word, tier, note) values
+  ('mercurial', 'hard', 'rich adjective neighbourhood');
+```
+
+### Growing the list
+
+`tools/seed-check.html` does the vetting. Serve the folder and open `/tools/seed-check.html`: load a tier's candidates (572 are bundled, ~138 / 175 / 259), press check, and it queries Datamuse for each one **using the same rules `engine.js` uses**, so the counts are what the game will really accept. Thin words are listed separately and an `insert` is written for the keepers. A full tier takes a minute or two.
+
+Three counts are reported, because Datamuse answers in score bands that mean different things:
+
+| column | what it counts | good for |
+| --- | --- | --- |
+| **reachable** | first-order links, weak or strong, a person might plausibly produce (30M band and up) | **the bar** |
+| strong | the subset that are dictionary synonyms (40M band or a `syn` tag) | judging depth |
+| usable | everything the engine would accept, down to the 19M tail — *absonous*, *cacodorous* | context only |
+
+Bars: **8 simple, 5 literary, 3 erudite.** A rarer word has a thinner entry, and three first-order words a player can actually reach is a playable erudite round.
+
+`usable` makes a poor bar, which took a run of 570 words to notice: nearly every word scores 200+ on it, because the request caps at 250 and the low band is enormous. It measures how much came back, not whether the round plays.
+
+**Why that tail is worthless for rare words:** ask Datamuse about *apocryphal* and you get one real synonym (*questionable*), two proper nouns (*Ecclesiasticus*, *Esdras*), and then 228 words like *apocatastatic*, *apollyonic*, *apostrophal*, *apophysal*. For uncommon words the API falls back to **spelling-similar** matches, not meaning. A player typing *spurious* or *fictitious* would be rejected and charged a point, because Datamuse doesn't link them — the word is fine, the data is thin, and the game can only accept what the API knows.
+
+Proper nouns are excluded from all three counts for the same reason: nobody offers *Esdras* as a synonym, and counting it made a word with one usable synonym look like it had three.
+
+The tool is a workbench, not part of the site. If you'd rather the candidate list not sit in a public repo, add `tools/` to `.gitignore` and keep it locally.
+
+### Why practice felt repetitive
+
+Not weak randomness: a 16-word pool drawn *with replacement*. Ten rounds averaged 2.4 repeats even with a perfect random source. Draws now avoid the last 12 words per tier (kept in `localStorage`, and passed to `practice_seed` so the database excludes them too), which takes that to zero until the pool is exhausted.
+
+Picks use `crypto.getRandomValues()`. A browser fingerprint would be *worse* for this — it is stable per browser, so it correlates draws rather than scattering them, and it contradicts the privacy page.
+
+## A second thesaurus
+
+Datamuse's `syn` tags come from WordNet, which is strict — it knows exactly one synonym for *apocryphal*. [Moby Thesaurus II](https://www.gutenberg.org/ebooks/3202) is public domain, Roget-derived, and knows dozens: 30,260 root words and ~2.5 million related terms in a single 24MB file.
+
+`supabase-thesaurus.sql` imports it into a `thesaurus` table with — as with seeds — **no select policy**, reachable only through a `related(word)` function that answers about one word at a time. The file carries the PowerShell one-liner for quoting the lines and the SQL for parsing them.
+
+At lookup time both sources are queried **in parallel** and merged, so latency is the slower of the two rather than the sum. Datamuse keeps ownership of what counts as a *strong* link; Moby-only words arrive as *loose* (amber dot) and clear the acceptance floor. Either source may fail without ending the round.
+
+Two things to expect. Moby is **loose by design** — it lists related terms, not strict synonyms — so the game gets markedly more permissive, much closer to the original Synonuity that accepted *kick* and *blow* for *touch*. If rounds start feeling slack, the honest lever is the entry limit rather than discarding links: 20 entries against a rich board is a different and harder optimisation than 20 against a thin one. And several seeds you retired as thin are worth re-checking once Moby is in.
+
+The strategic gain: with the thesaurus in your own database, a future Edge Function can replay a submitted round and recompute its score entirely inside Postgres — the groundwork for verifying the leaderboard without trusting the browser.
 
 ## Word data
 
