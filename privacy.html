@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy — Synonym Ladder</title>
+<meta name="description" content="What Synonym Ladder stores, why, and how to have it deleted.">
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='14'>🪜</text></svg>">
+</head>
+<body data-page="static">
+
+<!-- ==================================================================
+     EDIT THIS BY HAND, like about.html. No scripts.
+
+     Two things to keep accurate as the site changes:
+       · the contact address below
+       · the list of what a round stores, if you add fields
+     A privacy note that has drifted from what the code does is worse
+     than none, because now it is a false statement rather than a
+     missing one.
+     ================================================================== -->
+
+<header class="bar">
+  <div class="brand">synonym ladder</div>
+  <nav class="modes">
+    <a class="link" href="index.html">play</a>
+    <a class="link" href="scoreboard.html">scoreboard</a>
+    <a class="link" href="about.html">about</a>
+  </nav>
+</header>
+
+<main class="prose">
+
+  <h1>Privacy</h1>
+  <p class="tagline">Last updated: 30 August 2026</p>
+
+  <section>
+    <h2>The short version</h2>
+    <p>
+      You can play without an account and nothing leaves your browser. If you sign in,
+      your finished rounds are stored so they can appear on the scoreboard. There are no
+      ads, no trackers, no analytics scripts, and nothing is sold or shared with anyone.
+    </p>
+  </section>
+
+  <section>
+    <h2>Playing without an account</h2>
+    <p>
+      Rounds are kept in your own browser's local storage. They never reach a server.
+      Clearing your browser data deletes them, and nobody else can see them.
+    </p>
+    <p>
+      The game does ask <a href="https://www.datamuse.com/api/" target="_blank" rel="noopener">Datamuse</a>
+      for the synonyms of each word you enter. Those requests carry the word and your IP
+      address, as any web request does. They are not linked to you here.
+    </p>
+  </section>
+
+  <section>
+    <h2>If you sign in</h2>
+    <p>Accounts and data are held in <a href="https://supabase.com" target="_blank" rel="noopener">Supabase</a>. Two kinds of account exist:</p>
+    <ul class="links">
+      <li><b>Anonymous</b> — no email, no name, nothing identifying. It exists only on this device and cannot be recovered elsewhere.</li>
+      <li><b>Google</b> — your email address and display name reach Supabase through Google's sign-in. Your email is never shown publicly; only the username you choose is.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>What a finished round stores</h2>
+    <ul class="links">
+      <li>the seed word, the difficulty tier, the date, and how long the round took</li>
+      <li>every word you found, with its rung and the word it linked from</li>
+      <li>words that missed, and words set aside for sharing a root</li>
+      <li>the score, entries used, hit rate, and the rest of the metrics panel</li>
+      <li>how many times the page lost focus during the round, and for how long</li>
+      <li>your chosen username</li>
+    </ul>
+    <p>
+      That last one deserves a plain word: the page can tell when it stops being the
+      frontmost window, and records a count. It cannot see what you switched to, and it
+      records nothing at all while you are not playing a round.
+    </p>
+  </section>
+
+  <section>
+    <h2>What is public</h2>
+    <p>
+      Rounds filed while signed in are readable by anyone — that is what a scoreboard is.
+      Your username, scores, words found, times and click-away counts are all visible to
+      other players. Your email address is not.
+    </p>
+  </section>
+
+  <section>
+    <h2>Aggregate use</h2>
+    <p>
+      Rounds may be studied in aggregate — which words prove reachable, how recall changes
+      with practice, which links people find and which they miss. Anything published from
+      that will be about patterns across players, not about individuals.
+    </p>
+  </section>
+
+  <section>
+    <h2>Deleting your data</h2>
+    <p>
+      Ask and it will be deleted: the account, the rounds, all of it. Write to
+      <!-- Replace with the address you actually want to receive these at. -->
+      <a href="mailto:you@example.com">you@example.com</a> from the address you signed in with.
+      For an anonymous account, clearing your browser data removes your side of it; say so
+      and the stored rounds go too, though without an email there is no way to prove which
+      ones are yours.
+    </p>
+  </section>
+
+  <section>
+    <h2>Cookies</h2>
+    <p>
+      None for advertising or tracking. Signing in stores a session token in your browser
+      so you stay signed in; that is its only purpose.
+    </p>
+  </section>
+
+  <p class="back"><a href="index.html">← back to the game</a></p>
+
+</main>
+
+<footer class="foot">
+  © <span>2026</span> Eric Kay.
+  Word data from <a href="https://www.datamuse.com/api/" target="_blank" rel="noopener">Datamuse</a>.
+</footer>
+
+</body>
+</html>

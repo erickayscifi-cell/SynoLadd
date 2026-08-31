@@ -8,14 +8,14 @@
 <link rel="stylesheet" href="styles.css">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='14'>🪜</text></svg>">
 </head>
-<body>
+<body data-page="game">
 
 <header class="bar">
   <div class="brand">synonym ladder</div>
   <nav class="modes">
     <button type="button" class="link" data-mode="daily">daily</button>
     <button type="button" class="link" data-mode="practice">practice</button>
-    <button type="button" class="link" id="btn-board">scoreboard</button>
+    <a class="link" href="scoreboard.html">scoreboard</a>
     <a class="link" href="about.html">about</a>
   </nav>
   <div class="bar-right">
@@ -118,46 +118,6 @@
     <button type="button" class="link" id="btn-rules">how it works</button>
   </section>
 
-  <section class="panel" id="board" hidden>
-    <div class="board-head">
-      <h2>Scoreboard</h2>
-      <span class="board-where" id="board-where"></span>
-    </div>
-    <nav class="board-tabs" id="board-tabs">
-      <button type="button" class="chip" data-board="easy">simple</button>
-      <button type="button" class="chip" data-board="medium">literary</button>
-      <button type="button" class="chip" data-board="hard">erudite</button>
-      <button type="button" class="chip" data-board="me">your progress</button>
-    </nav>
-    <div class="board-scroll">
-      <table class="board-table" id="board-scores">
-        <thead id="board-thead"></thead>
-        <tbody id="board-tbody"></tbody>
-      </table>
-    </div>
-    <p class="board-note" id="board-note"></p>
-
-    <!-- Filled in when a row is clicked: the full metrics for that round. -->
-    <section class="run-detail" id="run-detail" hidden>
-      <div class="run-head">
-        <h3 id="run-title">Round detail</h3>
-        <button type="button" class="link" id="btn-run-close">close detail</button>
-      </div>
-      <p class="run-words" id="run-words"></p>
-      <div class="metric-groups" id="run-groups"></div>
-      <div class="hist-block">
-        <h3 class="metric-head">word length</h3>
-        <div class="hist" id="run-hist"></div>
-      </div>
-    </section>
-
-    <div class="panel-actions">
-      <button type="button" class="link" id="btn-board-close">close</button>
-      <button type="button" class="link" id="btn-rename">change name</button>
-      <button type="button" class="link" id="btn-signout" hidden>sign out</button>
-    </div>
-  </section>
-
   <section class="panel" id="metrics" hidden>
     <h2>Metrics</h2>
     <div class="metric-groups" id="metric-groups"></div>
@@ -192,6 +152,7 @@
 </main>
 
 <footer class="foot">
+  <a href="privacy.html">privacy</a> ·
   Word data from <a href="https://www.datamuse.com/api/" target="_blank" rel="noopener">Datamuse</a>.
 </footer>
 

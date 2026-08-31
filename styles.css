@@ -289,6 +289,16 @@ tbody tr:last-child td { padding-bottom: 14px; }
 .signin-rule { margin: 18px 0 14px; border: 0; border-top: 1px solid var(--line); }
 .signin-small { margin: 6px 0 0 !important; font-size: 0.78rem; color: var(--muted); }
 
+/* ---- scoreboard page ---- */
+.board-page { max-width: 1080px; margin: 0 auto; padding: 30px 22px 60px; }
+.board-intro { max-width: 620px; margin-bottom: 6px; }
+.board-intro h1 { margin: 0 0 6px; font-size: clamp(1.8rem, 5vw, 2.3rem); font-weight: 500; letter-spacing: -0.02em; }
+.board-intro p { margin: 0; font-size: 0.92rem; color: var(--muted); }
+.board-page .panel { margin-top: 18px; }
+.disclosure { padding: 20px 22px; border: 1px solid var(--line); border-radius: var(--radius); }
+.disclosure h2 { margin-bottom: 10px; }
+.disclosure p { margin: 0; font-size: 0.92rem; }
+
 /* ---- scoreboard ---- */
 .board-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
 .board-head h2 { margin: 0 0 12px; }

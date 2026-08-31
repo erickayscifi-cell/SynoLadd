@@ -20,7 +20,9 @@ The three tiers are **simple**, **literary** and **erudite** — they describe t
 
 | File | What it is |
 | --- | --- |
-| `index.html` | Markup and copy |
+| `index.html` | The game. `data-page="game"`. |
+| `scoreboard.html` | The boards, on their own page. `data-page="board"`. Same scripts; `app.js` runs only the half each page has markup for. |
+| `privacy.html` | What's stored and how to have it deleted. Hand-edited, no scripts. |
 | `styles.css` | Styling, light + dark |
 | `engine.js` | Game logic: lookups, rung placement, scoring. No DOM. |
 | `app.js` | UI, timer, modes, localStorage |
@@ -88,7 +90,8 @@ The files split along clean seams, so most changes touch exactly one:
 
 - rules, scoring, thesaurus behaviour → `engine.js` (then `node test.js`)
 - seed words, tier names → `words.js`
-- screen layout and copy → `index.html`
+- screen layout and copy → `index.html` (game) or `scoreboard.html` (boards)
+- what's stored, or the featured-content disclosure → `privacy.html` / `about.html`, both hand-edited
 - interaction, metrics panel, click-aways → `app.js`
 - scoreboard storage and accounts → `scoreboard.js` / `cloud.js` (then `node test-scoreboard.js`)
 - your author page → `about.html`
