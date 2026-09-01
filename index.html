@@ -10,11 +10,17 @@
 </head>
 <body data-page="game">
 
+<!-- Where confetti and emoji land. Fixed, on top, and click-through so it
+     can never swallow a keystroke mid-round. Hidden from screen readers:
+     the message line already announces every outcome in words. -->
+<div class="toast-layer" id="toast-layer" aria-hidden="true"></div>
+
 <header class="bar">
   <div class="brand">synonym ladder</div>
   <nav class="modes">
     <button type="button" class="link" data-mode="daily">daily</button>
     <button type="button" class="link" data-mode="practice">practice</button>
+    <button type="button" class="link" data-mode="blitz">blitz</button>
     <a class="link" href="scoreboard.html">scoreboard</a>
     <a class="link" href="about.html">about</a>
   </nav>
@@ -138,6 +144,7 @@
       <li>A word always takes its <b>shortest trace</b> back to the seed. If a later find gives it a shorter route, it moves up a rung and scores more — a 4th-order word that turns out to be reachable in three steps becomes 3rd order. Extra links beyond that shortest trace are ignored, so there are no loops to untangle.</li>
       <li>You get <b>20 entries</b>. A word that lands and a word that misses each spend one; same-root words and repeats of what's already on the board are free. When the 20 are gone the round is over.</li>
       <li>The clock starts on your first entry, not when the word appears.</li>
+      <li><b>Blitz</b> is the same game against a countdown. The round ends when the clock runs out or the 20 entries do, whichever comes first — so it rewards going wide fast rather than deliberating.</li>
       <li>A word that links to nothing — a miss or a misspelling — drops into <b>tries</b> and costs <b>1</b> point. There is no spellcheck and no hint about what went wrong.</li>
       <li>A word is charged once. Anything on the tries list can be entered again for free, as often as you like — a word that linked to nothing early on may well land once the board has grown around it.</li>
       <li>A word sharing a root with one already in play (<i>discord</i> and <i>discordant</i> are the same word) goes to <b>same root</b> instead. That bucket is neutral: no points, no penalty. It isn't a wrong answer, it just can't be its own answer.</li>

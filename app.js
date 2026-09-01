@@ -91,7 +91,8 @@
     started: false,      // has a word been entered yet?
     ticking: false,
     finished: false,
-    reason: null,        // 'limit' | 'stopped' | 'saved'
+    reason: null,        // 'limit' | 'time' | 'stopped' | 'saved'
+    countdown: 0,        // blitz only: seconds allowed, 0 means untimed
     filed: false,        // has this round been sent to the scoreboard?
     tickHandle: null,
     signInWatchdog: null,
@@ -267,12 +268,142 @@
     });
   }
 
+  /* ---------- surprise and delight --------------------------------------
+     Blitz earns a little theatre; the untimed modes stay quiet, which is
+     what makes blitz feel different. config.js decides ('blitz' | 'always'
+     | 'never'), and the system's reduced-motion setting overrides the
+     animation regardless — confetti is the classic thing that makes some
+     people ill, and a convention is exactly where you meet them. */
+
+  var CELEBRATE = CFG.celebrate || 'blitz';
+  var TOAST_LAYER = byId('toast-layer');
+
+  function celebrating() {
+    if (!TOAST_LAYER || CELEBRATE === 'never') return false;
+    return CELEBRATE === 'always' || (CELEBRATE === 'blitz' && state.mode === 'blitz');
+  }
+
+  function toast(emoji, label) {
+    if (!TOAST_LAYER) return;
+    var node = document.createElement('div');
+    node.className = 'toast';
+    node.textContent = emoji;
+    // a touch of scatter so repeats do not stack into one blur
+    node.style.left = (44 + Math.random() * 12) + '%';
+    node.style.top = (30 + Math.random() * 8) + '%';
+    if (label) {
+      var tag = document.createElement('span');
+      tag.className = 'toast-label';
+      tag.textContent = label;
+      node.appendChild(tag);
+    }
+    TOAST_LAYER.appendChild(node);
+    setTimeout(function () { if (node.parentNode) node.parentNode.removeChild(node); }, 1300);
+  }
+
+  var CONFETTI_COLOURS = ['#1f6f6b', '#c08a2e', '#b5504a', '#5fc0b8', '#d8a44a', '#7a9e7e'];
+
+  function confetti(count) {
+    if (!TOAST_LAYER) return;
+    var originX = window.innerWidth / 2;
+    var originY = window.innerHeight * 0.36;
+    for (var i = 0; i < count; i++) {
+      var bit = document.createElement('div');
+      bit.className = 'confetti';
+      bit.style.left = originX + 'px';
+      bit.style.top = originY + 'px';
+      bit.style.background = CONFETTI_COLOURS[i % CONFETTI_COLOURS.length];
+      bit.style.setProperty('--dx', (Math.random() * 320 - 160).toFixed(0) + 'px');
+      bit.style.setProperty('--dy', (Math.random() * 200 + 90).toFixed(0) + 'px');
+      bit.style.setProperty('--spin', (Math.random() * 720 - 360).toFixed(0) + 'deg');
+      bit.style.animationDelay = (Math.random() * 90).toFixed(0) + 'ms';
+      TOAST_LAYER.appendChild(bit);
+      (function (node) {
+        setTimeout(function () { if (node.parentNode) node.parentNode.removeChild(node); }, 1400);
+      })(bit);
+    }
+  }
+
+  /* Bigger finds get a bigger party — a first-order word is worth eight
+     times a fourth-order one, and the celebration should say so. */
+  var HIT_STYLE = {
+    1: { emoji: '🎉', confetti: 20 },
+    2: { emoji: '✨', confetti: 12 },
+    3: { emoji: '👏', confetti: 7 },
+    4: { emoji: '🙂', confetti: 4 }
+  };
+
+  function celebrateHit(entry) {
+    if (!celebrating()) return;
+    var look = HIT_STYLE[entry.depth] || HIT_STYLE[4];
+    toast(look.emoji, '+' + entry.points);
+    confetti(look.confetti);
+  }
+
+  function celebrateMiss() {
+    if (!celebrating()) return;
+    toast('💨', '−1');
+  }
+
+  function celebrateClock(secondsRemaining) {
+    if (!celebrating()) return;
+    if (secondsRemaining === 60) toast('😅', 'one minute');
+    else if (secondsRemaining === 10) toast('⏰', 'ten seconds');
+  }
+
+  /* ---------- remembering what we looked up ------------------------------
+     "clear", "loud", "plain" turn up round after round, and each one used
+     to cost two network calls every time. The merged answer for a word
+     barely changes, so keep it: instantly in memory for this session, and
+     in localStorage for the next one.
+
+     Kept per browser rather than shared. A shared cache would need
+     somewhere for clients to WRITE their results, and an open write
+     endpoint is an invitation to poison "clear" for everybody. */
+  var CACHE_KEY = 'words:' + (CFG.appVersion || '0') + ':';
+  var CACHE_TTL = 7 * 24 * 60 * 60 * 1000;   // a week
+  var CACHE_MAX = 150;                        // words kept on disk
+  var memo = {};                              // this session, no parsing cost
+
+  function cacheGet(word) {
+    if (memo[word]) return memo[word];
+    var hit = load(CACHE_KEY + word);
+    if (!hit || !hit.at || !hit.map) return null;
+    if (Date.now() - hit.at > CACHE_TTL) return null;
+    memo[word] = hit.map;
+    return hit.map;
+  }
+
+  function cachePut(word, map) {
+    memo[word] = map;
+    save(CACHE_KEY + word, { at: Date.now(), map: map });
+    // newest first, oldest evicted — otherwise a long practice streak fills
+    // localStorage and every write starts failing silently
+    var index = load('words-index') || [];
+    index = [word].concat(index.filter(function (w) { return w !== word; }));
+    while (index.length > CACHE_MAX) {
+      var drop = index.pop();
+      try { localStorage.removeItem(STORE_PREFIX + CACHE_KEY + drop); } catch (e) {}
+    }
+    save('words-index', index);
+  }
+
   /* ---------- looking a word up -----------------------------------------
      Datamuse and Moby answer at the same time, and the results merge:
      Datamuse decides what counts as a strong link, Moby fills in the words
      it has never heard of. Both are allowed to fail — a round with one
      source is worse than a round with two, but a round with none is over. */
   function lookUpWord(word) {
+    var remembered = cacheGet(word);
+    if (remembered) return Promise.resolve(remembered);
+    return fetchWord(word).then(function (map) {
+      // only worth keeping if something came back
+      if (map && Object.keys(map).length) cachePut(word, map);
+      return map;
+    });
+  }
+
+  function fetchWord(word) {
     var datamuse = SL.defaultFetcher(word).catch(function (err) {
       console.warn('[synonym ladder] datamuse lookup failed for "' + word + '":', err && err.message);
       return {};
@@ -295,6 +426,8 @@
     state.started = false;
     state.reason = null;
     state.filed = false;
+    // blitz is the only timed mode; CFG.blitzSeconds is the one dial
+    state.countdown = opts.mode === 'blitz' ? (CFG.blitzSeconds || 240) : 0;
     state.away = false;
     state.awayCount = 0;
     state.awaySeconds = 0;
@@ -307,9 +440,12 @@
     el.seed.textContent = opts.word;
     el.seedLabel.textContent = opts.mode === 'daily'
       ? 'daily puzzle · ' + tierName(opts.tier) + ' · ' + todayKey()
-      : 'practice · ' + tierName(opts.tier);
-    el.tierPicker.hidden = opts.mode !== 'practice';
-    el.newWord.hidden = opts.mode !== 'practice';
+      : opts.mode === 'blitz'
+        ? 'blitz · ' + tierName(opts.tier) + ' · ' + clock(state.countdown) + ' on the clock'
+        : 'practice · ' + tierName(opts.tier);
+    var freeChoice = opts.mode === 'practice' || opts.mode === 'blitz';
+    el.tierPicker.hidden = !freeChoice;
+    el.newWord.hidden = !freeChoice;
     el.summary.hidden = true;
     el.guess.value = '';
     setBusy(true);
@@ -357,7 +493,13 @@
     state.ticking = true;
     state.tickHandle = setInterval(function () {
       state.elapsed++;
-      el.time.textContent = clock(state.elapsed);
+      paintClock();
+      if (state.countdown) celebrateClock(state.countdown - state.elapsed);
+      // whichever runs out first — the clock or the entries — ends the round
+      if (state.countdown && state.elapsed >= state.countdown) {
+        finishRound(false, 'time');
+        return;
+      }
       if (state.elapsed % 10 === 0) persist();
       // syllable / frequency data lands a moment after a word does
       if (!el.metrics.hidden && state.elapsed % 2 === 0) renderMetrics();
@@ -372,6 +514,19 @@
   function clock(sec) {
     var m = Math.floor(sec / 60), s = sec % 60;
     return m + ':' + (s < 10 ? '0' : '') + s;
+  }
+
+  /* Blitz counts down, everything else counts up. One function so the
+     tick and a full re-render can never disagree about the clock. */
+  function secondsLeft() {
+    return state.countdown ? Math.max(state.countdown - state.elapsed, 0) : null;
+  }
+
+  function paintClock() {
+    if (!el.time) return;
+    var left = secondsLeft();
+    el.time.textContent = clock(left === null ? state.elapsed : left);
+    el.time.classList.toggle('miss', left !== null && left <= 30);
   }
 
   function persist() {
@@ -429,11 +584,13 @@
           note += ' · shorter trace for ' + moved.join(', ');
         }
         say(note + left(result), 'ok');
+        celebrateHit(entry);
         render(entry.word);
       } else if (result.status === 'rejected') {
         // Links to nothing: onto the red list, -1.
         el.guess.value = '';
         say(result.message + ' −' + result.item.cost + left(result), 'no');
+        celebrateMiss();
         render();
       } else if (result.status === 'root') {
         // Same root as something in play: neutral, costs nothing.
@@ -507,7 +664,7 @@
     var remaining = state.game ? state.game.guessesLeft() : 0;
     el.left.textContent = remaining;
     el.left.classList.toggle('miss', remaining <= 5);
-    el.time.textContent = clock(state.elapsed);
+    paintClock();
     renderTries();
     renderMetrics();
   }
@@ -778,6 +935,9 @@
   }
 
   function boardHeaders(view) {
+    if (view === 'blitz') {
+      return ['#', 'player', 'score', 'word', 'tier', '1st', 'entries', 'hit', 'time'];
+    }
     return view === 'me'
       ? ['when', 'word', 'tier', 'score', '1st', 'entries', 'hit', 'pts/entry', 'away', 'time']
       : ['#', 'player', 'score', 'word', '1st', 'entries', 'hit', 'pts/entry', 'away', 'time'];
@@ -823,7 +983,9 @@
     var run = ++boardRun;
     var job = boardView === 'me'
       ? scoreboard.myRounds(CFG.historySize || 30)
-      : scoreboard.topByTier(boardView, CFG.boardSize || 25);
+      : boardView === 'blitz'
+        ? scoreboard.blitzBoard(CFG.boardSize || 25)
+        : scoreboard.topByTier(boardView, CFG.boardSize || 25);
 
     job.then(function (rows) {
       if (run !== boardRun) return;      // superseded while we were waiting
@@ -838,7 +1000,10 @@
       rows.forEach(function (r, i) {
         var tr = document.createElement('tr');
         if (r.username === me) tr.className = 'mine';
-        var cells = boardView === 'me'
+        var cells = boardView === 'blitz'
+          ? [i + 1, r.username, r.score, r.seed, tierName(r.tier), r.rung1,
+             r.entries + '/' + r.entry_limit, r.hit_rate, clock(r.seconds)]
+          : boardView === 'me'
           ? [(r.played_at || '').slice(0, 10), r.seed, tierName(r.tier), r.score, r.rung1,
              r.entries + '/' + r.entry_limit, r.hit_rate, r.points_per_entry,
              awayCell(r), clock(r.seconds)]
@@ -857,7 +1022,10 @@
         });
         el.boardTbody.appendChild(tr);
       });
-      el.boardNote.innerHTML = (boardView === 'me'
+      el.boardNote.innerHTML = (boardView === 'blitz'
+        ? 'Best timed round per player, across all tiers — a countdown makes the tiers ' +
+          'comparable in a way untimed play does not.'
+        : boardView === 'me'
         ? 'Every round you have finished, newest first, across all tiers. ' +
           'Watch 1st-order counts climb — that is the thesaurus recall improving.'
         : '<em>One row per player</em> — their single best round on ' + tierName(boardView) +
@@ -1126,6 +1294,9 @@
     var limit = state.game.config.guessLimit;
     var why = state.reason === 'limit'
       ? 'All ' + limit + ' entries used.'
+      : state.reason === 'time'
+        ? 'Time up after ' + clock(state.countdown) + ' — ' +
+          state.game.guesses() + ' of ' + limit + ' entries used.'
       : state.reason === 'stopped'
         ? 'You called it after ' + state.game.guesses() + ' of ' + limit + ' entries.'
         : 'Saved from an earlier session.';
@@ -1152,7 +1323,8 @@
       : 'You cleared the obvious first-order words.';
 
     el.summary.hidden = false;
-    el.overFlag.textContent = state.reason === 'limit' ? 'no entries left' : 'round over';
+    el.overFlag.textContent = state.reason === 'limit' ? 'no entries left'
+      : state.reason === 'time' ? 'time up' : 'round over';
     if (!silent) el.summary.scrollIntoView({ behavior: 'smooth', block: 'center' });
     el.metrics.hidden = false;
     el.metricsBtn.classList.add('active');
@@ -1216,9 +1388,21 @@
     });
   }
 
+  /* Blitz: same words, same scoring, same 20 entries — but a clock running
+     down. Whichever runs out first ends the round. Length lives in
+     config.js as blitzSeconds. */
+  function startBlitz(tier) {
+    stopTimer();
+    say('Choosing a word…');
+    choosePracticeWord(tier).then(function (word) {
+      startRound({ mode: 'blitz', tier: tier, word: word });
+    });
+  }
+
   document.querySelectorAll('[data-mode]').forEach(function (btn) {
     btn.addEventListener('click', function () {
       if (btn.dataset.mode === 'daily') startDaily();
+      else if (btn.dataset.mode === 'blitz') startBlitz(state.tier);
       else startPractice(state.tier);
     });
   });
@@ -1237,7 +1421,9 @@
   on(el.finish, 'click', function () { finishRound(false); });
 
   on(el.again, 'click', function () {
-    startPractice(state.tier, state.game && state.game.seed);
+    // another go at whatever they were just playing
+    if (state.mode === 'blitz') startBlitz(state.tier);
+    else startPractice(state.tier, state.game && state.game.seed);
   });
 
   on(el.copy, 'click', function () {

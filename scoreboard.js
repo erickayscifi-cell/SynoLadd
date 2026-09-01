@@ -159,6 +159,20 @@
         return Promise.resolve(list.slice(0, limit || 25));
       },
 
+      /* Best blitz round per player, across every tier — the same shape
+         the blitz_board view returns. */
+      blitzBoard: function (limit) {
+        var best = {};
+        rounds().filter(function (r) { return r.mode === 'blitz'; }).forEach(function (r) {
+          var key = r.username || 'you';
+          if (!best[key] || r.score > best[key].score ||
+              (r.score === best[key].score && r.seconds < best[key].seconds)) best[key] = r;
+        });
+        var list = Object.keys(best).map(function (k) { return best[k]; })
+          .sort(function (a, b) { return b.score - a.score || a.seconds - b.seconds; });
+        return Promise.resolve(list.slice(0, limit || 25));
+      },
+
       myRounds: function (limit) {
         var me = identity().username;
         var list = rounds().filter(function (r) { return !r.username || r.username === me; });
@@ -289,6 +303,10 @@
 
       // The shared board is public: read it from the cloud even signed out.
       topByTier: function (tier, limit) { return active().topByTier(tier, limit); },
+      blitzBoard: function (limit) {
+        var d = active();
+        return d.blitzBoard ? d.blitzBoard(limit) : Promise.resolve([]);
+      },
 
       /* Your own history must come from wherever your rounds actually are.
          Reading it from the cloud while signed out returned an empty list

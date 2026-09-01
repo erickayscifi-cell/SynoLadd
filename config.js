@@ -29,6 +29,19 @@ window.SL_CONFIG = {
   // just want the game.
   offlineOnly: false,
 
+  // ==================================================================
+  //  BLITZ LENGTH — change this one number to retime the timed mode.
+  //  240 = four minutes. At a busy table, 120 or 90 keeps a queue moving.
+  //  Takes effect on the next round; no other change needed anywhere.
+  // ==================================================================
+  blitzSeconds: 240,
+
+  //  Confetti, emoji and the rest: 'blitz' keeps the celebration to timed
+  //  rounds, 'always' turns it on everywhere, 'never' switches it off.
+  //  Anyone who has asked their system for reduced motion gets the emoji
+  //  without the animation, whatever this says.
+  celebrate: 'blitz',
+
   appVersion: '0.5',      // stored with each round, so old data stays readable
   boardSize: 25,          // rows shown per leaderboard
   historySize: 30         // of your own rounds shown in progress view

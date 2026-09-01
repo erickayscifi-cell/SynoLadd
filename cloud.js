@@ -165,6 +165,17 @@ if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) {
       return data || [];
     },
 
+    async blitzBoard(limit) {
+      const { data, error } = await supabase
+        .from('blitz_board')
+        .select('*')
+        .order('score', { ascending: false })
+        .order('seconds', { ascending: true })
+        .limit(limit || 25);
+      if (error) throw new Error(error.message);
+      return data || [];
+    },
+
     async myRounds(limit) {
       if (!session) return [];
       const { data, error } = await supabase
