@@ -272,7 +272,9 @@ tbody tr:last-child td { padding-bottom: 14px; }
 .toast {
   position: absolute;
   left: 50%;
-  top: 34%;
+  /* Up beside the seed word rather than over the board, so it never
+     covers the thing the player is reading or the box they are typing in. */
+  top: 13%;
   font-size: 3rem;
   line-height: 1;
   text-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);

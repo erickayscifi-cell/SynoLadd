@@ -31,10 +31,11 @@ window.SL_CONFIG = {
 
   // ==================================================================
   //  BLITZ LENGTH — change this one number to retime the timed mode.
-  //  240 = four minutes. At a busy table, 120 or 90 keeps a queue moving.
+  //  150 = two and a half minutes. 120 or 90 keeps a busy queue moving;
+  //  240 gives someone room to think it through.
   //  Takes effect on the next round; no other change needed anywhere.
   // ==================================================================
-  blitzSeconds: 240,
+  blitzSeconds: 150,
 
   //  Confetti, emoji and the rest: 'blitz' keeps the celebration to timed
   //  rounds, 'always' turns it on everywhere, 'never' switches it off.

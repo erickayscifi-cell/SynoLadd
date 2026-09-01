@@ -288,9 +288,10 @@
     var node = document.createElement('div');
     node.className = 'toast';
     node.textContent = emoji;
-    // a touch of scatter so repeats do not stack into one blur
-    node.style.left = (44 + Math.random() * 12) + '%';
-    node.style.top = (30 + Math.random() * 8) + '%';
+    // a touch of scatter so repeats do not stack into one blur, but kept
+    // near the middle and high on the page, beside the seed word
+    node.style.left = (47 + Math.random() * 6) + '%';
+    node.style.top = (11 + Math.random() * 5) + '%';
     if (label) {
       var tag = document.createElement('span');
       tag.className = 'toast-label';
@@ -305,8 +306,9 @@
 
   function confetti(count) {
     if (!TOAST_LAYER) return;
+    // bursts from the same height as the toast, up by the seed word
     var originX = window.innerWidth / 2;
-    var originY = window.innerHeight * 0.36;
+    var originY = window.innerHeight * 0.15;
     for (var i = 0; i < count; i++) {
       var bit = document.createElement('div');
       bit.className = 'confetti';
@@ -1401,9 +1403,17 @@
 
   document.querySelectorAll('[data-mode]').forEach(function (btn) {
     btn.addEventListener('click', function () {
-      if (btn.dataset.mode === 'daily') startDaily();
-      else if (btn.dataset.mode === 'blitz') startBlitz(state.tier);
-      else startPractice(state.tier);
+      var mode = btn.dataset.mode;
+      if (mode === 'daily') startDaily();
+      else if (mode === 'blitz') startBlitz(state.tier);
+      else if (mode === 'practice') startPractice(state.tier);
+      else {
+        /* A mode the script does not know about means the markup is newer
+           than this file — the usual cause is a cached app.js. Say so
+           rather than quietly starting the wrong game. */
+        console.warn('[synonym ladder] unknown mode "' + mode + '" — app.js looks out of date. Hard-reload (Ctrl+Shift+R).');
+        say('That mode needs a newer app.js — try a hard reload (Ctrl+Shift+R).', 'no');
+      }
     });
   });
 
