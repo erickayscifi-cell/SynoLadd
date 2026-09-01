@@ -586,8 +586,9 @@
       var parents = (entry.parents && entry.parents.length) ? entry.parents : [entry.parent];
       var from = document.createElement('span');
       from.className = 'from';
-      from.textContent = '← ' + parents.slice(0, 3).join(', ') +
-        (parents.length > 3 ? ' +' + (parents.length - 3) : '');
+      // Two names, then a count. Three was enough to wrap the cell.
+      from.textContent = '← ' + parents.slice(0, 2).join(', ') +
+        (parents.length > 2 ? ' +' + (parents.length - 2) : '');
       if (parents.length > 1) {
         from.title = parents.length + ' routes in: ' + parents.join(', ');
       }
@@ -743,6 +744,13 @@
 
   var boardView = 'hard';
 
+  /* Two renders can be in flight at once — the page boots one, and cloud.js
+     registering fires another through onChange. Both cleared the table
+     synchronously and then appended when their own query returned, so the
+     rows arrived twice. Each render takes a ticket and only the newest one
+     is allowed to draw. */
+  var boardRun = 0;
+
   function renderAccount() {
     var id = scoreboard.identity();
     var remote = scoreboard.remoteIdentity();
@@ -812,11 +820,14 @@
     el.boardTbody.innerHTML = '';
     el.boardNote.textContent = 'loading…';
 
+    var run = ++boardRun;
     var job = boardView === 'me'
       ? scoreboard.myRounds(CFG.historySize || 30)
       : scoreboard.topByTier(boardView, CFG.boardSize || 25);
 
     job.then(function (rows) {
+      if (run !== boardRun) return;      // superseded while we were waiting
+      el.boardTbody.innerHTML = '';      // clear again: ours are the only rows
       if (!rows.length) {
         el.boardNote.textContent = boardView === 'me'
           ? 'No finished rounds yet. A round lands here once you finish it — either by using all 20 entries or by pressing “finish round”.'
@@ -854,6 +865,7 @@
           ' rounds are under “your progress”, and rounds on other tiers are on their own boards.') +
         ' Click any row for the full metrics. <em>Away</em> counts times the window lost focus.';
     }, function (err) {
+      if (run !== boardRun) return;
       el.boardNote.textContent = 'Could not load the board: ' + err.message;
     });
   }

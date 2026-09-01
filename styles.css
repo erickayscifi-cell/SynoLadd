@@ -139,19 +139,23 @@ th {
   vertical-align: bottom;
   padding: 12px 14px;
   border-bottom: 1px solid var(--line);
-  width: 25%;
+  /* Columns size to their content rather than splitting evenly, so a word
+     with several routes in stays on one line. The board scrolls sideways
+     if the total outgrows the page. */
+  width: auto;
+  white-space: nowrap;
 }
 th + th { border-left: 1px solid var(--line); }
 .col-name { display: block; font-size: 0.9rem; font-weight: 500; }
 .col-meta { display: block; font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
 .col-meta b { color: var(--fg); font-weight: 500; }
 
-td { padding: 3px 14px; vertical-align: top; width: 25%; }
+td { padding: 3px 14px; vertical-align: top; width: auto; white-space: nowrap; }
 td + td { border-left: 1px solid var(--line); }
 tbody tr:first-child td { padding-top: 12px; }
 tbody tr:last-child td { padding-bottom: 14px; }
 
-.cell { display: flex; align-items: baseline; gap: 7px; }
+.cell { display: flex; align-items: baseline; gap: 7px; flex-wrap: nowrap; }
 .word { font-size: 1rem; }
 .word.new { animation: pop 0.5s ease; }
 @keyframes pop { from { background: rgba(31,111,107,0.18); } to { background: transparent; } }
@@ -256,7 +260,8 @@ tbody tr:last-child td { padding-bottom: 14px; }
 
 /* ---- account + sign-in ---- */
 .account { display: inline-flex; align-items: center; gap: 8px; padding-left: 10px; border-left: 1px solid var(--line); }
-#btn-who { max-width: 14ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#btn-who { max-width: 22ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#btn-who.guest { font-style: italic; }
 
 .signin-sheet {
   position: fixed;
@@ -332,6 +337,10 @@ tbody tr:last-child td { padding-bottom: 14px; }
 .board-note em { font-style: normal; color: var(--fg); }
 .board-table tr.clickable { cursor: pointer; }
 .board-table tr.clickable:hover td { background: rgba(31, 111, 107, 0.06); }
+
+.link.danger { color: var(--miss); }
+.link.danger:hover { color: var(--miss); text-decoration: underline; }
+.account-note { margin: 12px 0 0; font-size: 0.82rem; color: var(--muted); }
 
 /* ---- one round, expanded ---- */
 .run-detail {
