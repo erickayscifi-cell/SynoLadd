@@ -35,8 +35,15 @@
 
   <!-- ---------- WHO YOU ARE ---------- -->
   <section class="author">
-    <!-- Portrait. Swap the src, or delete this whole <img> line for a text-only page. -->
-    <img class="portrait" src="https://github.com/erickayscifi-cell/SynoLadd/blob/main/images/80485-space-ants.jpg" alt="Space Ants: Never Say Die Epic Indie SciFi">
+    <!-- Portrait. Point this at any file in images/ — a photo of you works
+         best here, since the circular crop cuts the corners off a book
+         cover. No photo? Delete this whole <img> line; the layout closes up.
+
+         Paths are RELATIVE. The images are already published with the site,
+         so images/foo.jpg is all that is needed — a github.com/.../blob/...
+         address is a web PAGE showing the file, not the file, which is why
+         it renders blank in an <img>. -->
+    <img class="portrait" src="images/portrait.jpg" alt="Eric Kay" loading="lazy">
 
     <div class="author-text">
       <h1>Author Eric Kay</h1>
@@ -65,7 +72,7 @@
     <div class="books">
 
       <article class="book">
-        <img src="https://github.com/erickayscifi-cell/SynoLadd/blob/main/images/DAHB%20Indie%20Mil%20Hard%20SciFi%202.png" alt="Cover of Drones Above Hell Below">
+        <img src="images/80485-space-ants.jpg" alt="Cover of Space Ants: Never Say Die" loading="lazy">
         <h3>Space Ants: Never Say Die</h3>
         <p class="book-meta">Novel · 2024</p>
         <p>
@@ -76,11 +83,11 @@
 
 	Join the ants as they navigate the perils of deep space: impacts, dehydration, and the constant threat of rival colonies. Witness their rise from the brink of extinction to becoming a dominant force in their orbit.
         </p>
-        <a class="button" href="https://www.amazon.com/Space-Ants-Never-Say-Die-ebook/dp/B0DHQND276">Space Ants Amazon</a>
+        <a class="button" href="https://www.amazon.com/Space-Ants-Never-Say-Die-ebook/dp/B0DHQND276">Find it on Amazon</a>
       </article>
 
       <article class="book">
-        <img src="images/book-two.jpg" alt="Cover of Your Second Book">
+        <img src="images/DAHB%20Indie%20Mil%20Hard%20SciFi%202.png" alt="Cover of Drones Above, Hell Below" loading="lazy">
         <h3>Drones Above, Hell Below</h3>
         <p class="book-meta">Fiction · 2026</p>
         <p>
@@ -94,7 +101,31 @@
 
 	A relentless and inventive military sci-fi thriller of mystery, action, and first contact gone catastrophically wrong.
         </p>
-        <a class="button" href="https://www.amazon.com/Drones-Above-Hell-Below-Slayers-ebook/dp/B0H1Q6TSKC">Action Sci-Fi Link</a>
+        <a class="button" href="https://www.amazon.com/Drones-Above-Hell-Below-Slayers-ebook/dp/B0H1Q6TSKC">Find it on Amazon</a>
+      </article>
+
+      <!-- TITLE CHECK: taken from the Amazon URL, not from the cover.
+           Correct it here if the shop title differs. -->
+      <article class="book">
+        <!-- Add the cover to images/ and point at it, or delete this line. -->
+        <img src="images/above-the-dark-waters.jpg" alt="Cover of Above the Dark Waters" loading="lazy">
+        <h3>Above the Dark Waters</h3>
+        <p class="book-meta">Novel · year</p>
+        <p>
+          Your blurb goes here — the same voice as the two above. What it is, who it
+          is for, and the line that makes a browser click.
+        </p>
+        <a class="button" href="https://www.amazon.com/Above-Dark-Waters-Eric-Kay-ebook/dp/B0CDVB76ZQ">Find it on Amazon</a>
+      </article>
+
+      <article class="book">
+        <img src="images/hardness-of-minds.jpg" alt="Cover of The Hardness of Minds" loading="lazy">
+        <h3>The Hardness of Minds</h3>
+        <p class="book-meta">Europan First Contact · year</p>
+        <p>
+          Your blurb goes here.
+        </p>
+        <a class="button" href="https://www.amazon.com/Hardness-Minds-Europan-First-Contact-ebook/dp/B09WKWBNFG">Find it on Amazon</a>
       </article>
 
     </div>
