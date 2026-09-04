@@ -83,6 +83,62 @@
     return w;
   }
 
+  /* ---------- endings that make the same word, not a new one ----------
+
+     Every rule in isVariant below needed the shorter word to be at least
+     four letters, so three-letter roots walked straight past all of them:
+     "oil" and "oily" both scored, and so did "dry"/"dried", "fat"/"fatty",
+     "big"/"bigger", "ice"/"icy". The floor was there to keep "lick" out of
+     "flick" — but those two differ by a PREFIX, so requiring the leftover
+     letters to be a real suffix keeps them apart without needing it.
+
+     Two lists, because short roots and Latinate endings collide. "pen" and
+     "penal", "fin" and "final", "log" and "logic", "son" and "sonic" are
+     unrelated pairs a blanket list would fuse. Inflections and the plain
+     -y / -ly derivations are safe even on three letters. */
+  var PLAIN_ENDINGS = ['s', 'es', 'd', 'ed', 'ing', 'y', 'ly',
+                       'er', 'ier', 'or', 'est', 'iest', 'en'];
+  var LONG_ENDINGS = ['ness', 'ity', 'ety', 'ful', 'less', 'ish', 'ous',
+                      'al', 'ic', 'ical', 'ment', 'tion', 'sion', 'ation',
+                      'ance', 'ence', 'able', 'ible', 'ize', 'ise'];
+
+  /* Pairs the suffix rule would fuse that are simply different words. Both
+     halves have to be plausible answers in the same round for this to
+     matter, which is why the list is short rather than exhaustive: "but"
+     and "butter" collide too, but no seed makes both of them synonyms.
+     Add a pair here if you ever watch one cost somebody a real answer. */
+  var NOT_VARIANTS = ['man|many', 'war|wary', 'ear|early', 'car|carry'];
+
+  /* What the shorter word can look like before an ending is added: itself,
+     a silent "e" dropped ("ice" -> "ic" + y), "y" turned to "i" ("dry" ->
+     "dri" + ed), or a doubled final consonant ("big" -> "bigg" + er). */
+  function baseForms(word) {
+    var forms = [word];
+    var last = word.charAt(word.length - 1);
+    if (word.length > 2) {
+      if (last === 'e') forms.push(word.slice(0, -1));
+      if (last === 'y') forms.push(word.slice(0, -1) + 'i');
+      if ('bdgklmnprtvz'.indexOf(last) !== -1) forms.push(word + last);
+    }
+    return forms;
+  }
+
+  /* Is `derived` just `root` with an ending on it? Called both ways round
+     by isVariant, so that equal-length pairs like "ice"/"icy" match
+     whichever order they arrive in. */
+  function suffixVariant(root, derived) {
+    if (root.length < 3) return false;
+    var endings = root.length >= 4 ? PLAIN_ENDINGS.concat(LONG_ENDINGS) : PLAIN_ENDINGS;
+    var bases = baseForms(root);
+    for (var b = 0; b < bases.length; b++) {
+      var base = bases[b];
+      if (derived.length <= base.length) continue;
+      if (derived.slice(0, base.length) !== base) continue;
+      if (endings.indexOf(derived.slice(base.length)) !== -1) return true;
+    }
+    return false;
+  }
+
   /* Same word wearing a different ending? "discord"/"discordant",
      "touch"/"touching", "pinch"/"pinches". Those are not separate answers,
      so they are set aside - but they are NOT wrong, and cost nothing.
@@ -93,10 +149,14 @@
      really is the front of the longer one. */
   function isVariant(guess, other) {
     if (guess === other) return true;
-    if (stem(guess) === stem(other)) return true;
 
     var longer = guess.length >= other.length ? guess : other;
     var shorter = guess.length >= other.length ? other : guess;
+
+    // Known collisions win over every rule below, including the stemmer.
+    if (NOT_VARIANTS.indexOf(shorter + '|' + longer) !== -1) return false;
+
+    if (stem(guess) === stem(other)) return true;
 
     // the shorter word is the whole front of the longer one, allowing for a
     // dropped silent "e" ("squeeze" -> "squeezing")
@@ -118,6 +178,12 @@
     while (shared < shorter.length && longer[shared] === shorter[shared]) shared++;
     if (shared >= 5 && shorter.length - shared <= 2 &&
         longer.length - shorter.length >= 3) return true;
+
+    /* The suffix rule, which is what catches the short roots every rule
+       above was too cautious to reach. Tried both ways round so that
+       "ice"/"icy" — same length, so "shorter" and "longer" are arbitrary —
+       matches whichever way the pair arrives. */
+    if (suffixVariant(shorter, longer) || suffixVariant(longer, shorter)) return true;
 
     return false;
   }

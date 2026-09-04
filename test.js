@@ -274,7 +274,17 @@ game.start()
      ['sorrow', 'sorrowful'], ['gloom', 'gloomy'], ['solemn', 'solemnly'],
      ['obstruct', 'obstruction'], ['squeeze', 'squeezing'], ['resolve', 'resolution'],
      ['research', 'researcher'], ['care', 'caress'], ['decline', 'declination'],
-     ['grave', 'gravity'], ['block', 'blockade']
+     ['grave', 'gravity'], ['block', 'blockade'],
+     /* Three-letter roots. Every rule needed four letters to work with, so
+        "oil" and "oily" both scored — caught in a live round on
+        "unctuous", where the board already held "oily". */
+     ['oil', 'oily'], ['dry', 'dried'], ['fat', 'fatty'], ['big', 'bigger'],
+     ['ice', 'icy'], ['icy', 'ice'], ['old', 'older'], ['sad', 'sadden'],
+     ['wet', 'wetting'], ['run', 'runs'], ['act', 'actor'], ['eat', 'eaten'],
+     /* Endings that change the spelling of the root, which the front-match
+        rules also missed. */
+     ['happy', 'happier'], ['happy', 'happiness'], ['beauty', 'beautiful'],
+     ['easy', 'easily'], ['grease', 'greasy']
     ].forEach(function (pair) {
       check('same root: ' + pair.join(' / '), SL.isVariant(pair[0], pair[1]), true);
     });
@@ -285,7 +295,17 @@ game.start()
      ['restrain', 'restore'], ['content', 'contest'], ['pinch', 'pinnacle'],
      ['dissonant', 'dissuade'], ['principle', 'principal'], ['divide', 'divisive'],
      ['trace', 'tract'], ['carry', 'carriage'], ['flick', 'lick'], ['slam', 'slap'],
-     ['blow', 'block'], ['tip', 'tickle'], ['punch', 'pinch']
+     ['blow', 'block'], ['tip', 'tickle'], ['punch', 'pinch'],
+     /* The suffix rule must not swallow words that merely begin with a
+        short word. A prefix is not a suffix. */
+     ['oil', 'soil'], ['ice', 'nice'], ['old', 'bold'], ['rest', 'wrest'],
+     ['ear', 'hear'], ['age', 'wage'],
+     /* Latinate endings on a three-letter root: different words that the
+        long ending list would fuse, which is why it needs four letters. */
+     ['pen', 'penal'], ['fin', 'final'], ['leg', 'legal'], ['log', 'logic'],
+     ['son', 'sonic'], ['pan', 'panic'],
+     // and the named exceptions
+     ['man', 'many'], ['war', 'wary'], ['ear', 'early'], ['car', 'carry']
     ].forEach(function (pair) {
       check('different words: ' + pair.join(' / '), SL.isVariant(pair[0], pair[1]), false);
     });
@@ -301,7 +321,13 @@ game.start()
       'principle precept rationale rule maxim tenet dogma axiom creed ' +
       'discordant dissonant divisive factious harsh jarring strident ' +
       'resolve reset research settle decide determine ' +
-      'gather temper yield plain curious grave sharp coarse sober candid earnest').split(' ');
+      'gather temper yield plain curious grave sharp coarse sober candid earnest ' +
+      /* Short words, added when the suffix rule lowered the floor to three
+         letters. These are the ones with most to lose from an over-eager
+         rule: they are all legitimate separate answers. */
+      'oil fat dry big ice old wet man war ear sum bit log pen fin leg son ' +
+      'pan art car age rich thin damp warm bland smooth slick sleek ' +
+      'greasy unctuous smarmy glossy thick heavy dirty grimy').split(' ');
 
     var collisions = [];
     for (var i = 0; i < pool.length; i++) {

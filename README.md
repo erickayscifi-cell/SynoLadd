@@ -288,13 +288,20 @@ The check is deliberately generous, because a strict WordNet lookup rejects word
 - links are checked **in both directions** — *caress* lists *touch* even though *touch* does not list *caress*;
 - a `syn` tag or a top-band score is a **strong** link (teal dot); a weaker but real association is a **loose** link (amber dot). Both score the same.
 
-Shared roots are caught locally rather than by the API, in `isVariant()` — the API is happy to treat *discord* and *discordant* as unrelated entries. Three rules, all conservative:
+Shared roots are caught locally rather than by the API, in `isVariant()` — the API is happy to treat *discord* and *discordant* as unrelated entries. Four rules, all conservative:
 
 1. the two words reduce to the same crude stem (*touch / touching*, *pinch / pinches*, *obstruct / obstruction*);
 2. the shorter word is the whole front of the longer one, allowing a dropped silent *e* (*discord / discordant*, *squeeze / squeezing*);
-3. a long shared front with almost nothing left over and a clearly longer partner, for endings that change shape mid-word (*resolve / resolution*, *decline / declination*).
+3. a long shared front with almost nothing left over and a clearly longer partner, for endings that change shape mid-word (*resolve / resolution*, *decline / declination*);
+4. the leftover letters are a real suffix (*oil / oily*, *big / bigger*, *dry / dried*, *happy / happiness*).
 
 Earlier versions were looser and produced real false positives: *reset* read as the same root as *research* (one mismatched letter allowed at the end), *content* as *contest* (over-eager `-ent` / `-est` stripping), *lick* as *flick* (matching anywhere in the word rather than at the front). Each has a regression test. Stemming now keeps more letters behind word-building endings than behind plain inflections, and matches must start at the front.
+
+Rule 4 was added after *oil* and *oily* both scored in a live round on *unctuous*. Rules 1–3 all need four letters to work with — a floor that exists to keep *lick* out of *flick* — so every three-letter root walked past them: *dry / dried*, *fat / fatty*, *big / bigger*, *ice / icy*, *old / older*. Requiring the leftover to be an actual suffix does the same job as the floor, because *flick* differs from *lick* by a **prefix**, and prefixes are not on the list.
+
+The suffix list is split in two. Inflections and the plain *-y* / *-ly* derivations apply at three letters; the Latinate endings (*-al*, *-ic*, *-ity*, *-ous*, *-tion*, *-ness*…) need four, because short roots collide with unrelated words that merely start the same way — *pen / penal*, *fin / final*, *leg / legal*, *log / logic*, *son / sonic*, *pan / panic*. `baseForms()` handles the spelling changes: silent *e* dropped (*ice → ic + y*), *y* to *i* (*dry → dri + ed*), doubled final consonant (*big → bigg + er*).
+
+`NOT_VARIANTS` in `engine.js` is a short list of pairs the suffix rule would wrongly fuse — *man / many*, *war / wary*, *ear / early*, *car / carry*. It is deliberately not exhaustive. *but / butter* collides too, but a collision only costs anybody an answer when **both** words are plausible in the same round, and no seed makes *but* and *butter* synonyms at once. Add a pair there if you ever watch one cost a player a real answer.
 
 Pairs that change shape more drastically still slip through as separate answers (*divide / divisive*, *principle / principal*), and a couple of unrelated pairs get caught (*grave / gravel*). Both directions are cheap now that the bucket is neutral, which is the main reason to keep it that way. `node test.js` includes a sweep over the real word lists asserting no pair of legitimate game answers collides.
 
