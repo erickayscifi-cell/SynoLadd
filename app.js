@@ -61,6 +61,7 @@
     boardTabs: byId('board-tabs'),
     boardThead: byId('board-thead'),
     boardTbody: byId('board-tbody'),
+    track: byId('entry-track'),
     boardNote: byId('board-note'),
     runDetail: byId('run-detail'),
     runTitle: byId('run-title'),
@@ -80,7 +81,14 @@
     summaryGrid: byId('summary-grid'),
     summaryMissed: byId('summary-missed'),
     copy: byId('btn-copy'),
-    again: byId('btn-again')
+    again: byId('btn-again'),
+    // today's daily board, game page only
+    dailyBoard: byId('daily-board'),
+    dailyWhere: byId('daily-where'),
+    dailyThead: byId('daily-thead'),
+    dailyTbody: byId('daily-tbody'),
+    dailyNote: byId('daily-note'),
+    dailyRefresh: byId('btn-daily-refresh')
   };
 
   var state = {
@@ -449,6 +457,7 @@
     el.tierPicker.hidden = !freeChoice;
     el.newWord.hidden = !freeChoice;
     el.summary.hidden = true;
+    show(el.dailyBoard, false);      // belongs to the round that just ended
     el.guess.value = '';
     setBusy(true);
     say('Loading the thesaurus for “' + opts.word + '”…');
@@ -468,7 +477,7 @@
 
     state.game.start().then(function () {
       if (hasSaved) {
-        return state.game.restore(saved.found, saved.tries, saved.roots).then(function () {
+        return state.game.restore(saved.found, saved.tries, saved.roots, saved.log).then(function () {
           state.elapsed = saved.elapsed || 0;
           state.awayCount = saved.awayCount || 0;
           state.awaySeconds = saved.awaySeconds || 0;
@@ -538,6 +547,7 @@
       found: state.game.found(),
       tries: state.game.tries(),
       roots: state.game.roots(),
+      log: state.game.log(),
       elapsed: state.elapsed,
       finished: state.finished,
       reason: state.reason,
@@ -661,6 +671,7 @@
       var slot = document.querySelector('[data-count="' + d + '"]');
       if (slot) slot.textContent = counts[d] + (counts[d] === 1 ? ' word' : ' words');
     }
+    renderTrack();
     el.score.textContent = state.game ? state.game.score() : 0;
     el.words.textContent = found.length;
     var remaining = state.game ? state.game.guessesLeft() : 0;
@@ -669,6 +680,27 @@
     paintClock();
     renderTries();
     renderMetrics();
+  }
+
+  /* One bar per entry the round allows, filled in as they are spent:
+     blue landed, red missed, grey a retry that cost an entry but no points.
+     Same-root words and duplicates never appear — they cost nothing, so
+     showing them would misrepresent what is left. */
+  function renderTrack() {
+    if (!el.track || !state.game) return;
+    var marks = state.game.log();
+    var limit = state.game.config.guessLimit;
+
+    // build the strip once, then only repaint what changed
+    if (el.track.childNodes.length !== limit) {
+      el.track.innerHTML = '';
+      for (var i = 0; i < limit; i++) {
+        el.track.appendChild(document.createElement('span'));
+      }
+    }
+    for (var j = 0; j < limit; j++) {
+      el.track.childNodes[j].className = 'pip' + (marks[j] ? ' ' + marks[j] : '');
+    }
   }
 
   function renderTries() {
@@ -937,6 +969,7 @@
   }
 
   function boardHeaders(view) {
+    if (view === 'daily') return DAILY_COLS;
     if (view === 'blitz') {
       return ['#', 'player', 'score', 'word', 'tier', '1st', 'entries', 'hit', 'time'];
     }
@@ -963,6 +996,8 @@
     var signedIn = !!(remote && remote.signedIn);
     var where = boardView === 'me'
       ? (signedIn ? 'your rounds · saved to your account' : 'your rounds · this browser only')
+      : boardView === 'daily'
+      ? 'today · ' + todayKey()
       : (scoreboard.hasRemote() ? 'shared board' : 'this browser only');
     el.boardWhere.textContent = where + ' · ' + (scoreboard.identity().username || 'signed out');
 
@@ -983,17 +1018,30 @@
     el.boardNote.textContent = 'loading…';
 
     var run = ++boardRun;
+    /* The daily board answers with a gate as well as rows — it may decline
+       to show anything at all — so keep the verdict for the note below. */
+    var gate = null;
     var job = boardView === 'me'
       ? scoreboard.myRounds(CFG.historySize || 30)
       : boardView === 'blitz'
         ? scoreboard.blitzBoard(CFG.boardSize || 25)
-        : scoreboard.topByTier(boardView, CFG.boardSize || 25);
+        : boardView === 'daily'
+          ? scoreboard.dailyBoard(CFG.boardSize || 25, todayKey()).then(function (board) {
+              gate = board || { played: false };
+              return gate.played ? (gate.rows || []) : [];
+            })
+          : scoreboard.topByTier(boardView, CFG.boardSize || 25);
 
     job.then(function (rows) {
       if (run !== boardRun) return;      // superseded while we were waiting
       el.boardTbody.innerHTML = '';      // clear again: ours are the only rows
       if (!rows.length) {
-        el.boardNote.textContent = boardView === 'me'
+        el.boardNote.innerHTML = boardView === 'daily'
+          ? (gate && gate.reason === 'signed-out'
+              ? 'Sign in, play today’s word, and this board opens.'
+              : 'Today’s board opens once you have finished today’s word — otherwise it ' +
+                'would hand you the day’s answers. <a href="index.html">Play it now</a>.')
+          : boardView === 'me'
           ? 'No finished rounds yet. A round lands here once you finish it — either by using all 20 entries or by pressing “finish round”.'
           : 'No scores on this board yet — be first.';
         return;
@@ -1001,8 +1049,11 @@
       var me = scoreboard.identity().username;
       rows.forEach(function (r, i) {
         var tr = document.createElement('tr');
-        if (r.username === me) tr.className = 'mine';
-        var cells = boardView === 'blitz'
+        if (r.username === me || r.mine) tr.className = 'mine';
+        var cells = boardView === 'daily'
+          ? [r.place, r.username, r.score, r.words, r.rung1,
+             r.entries + '/' + r.entry_limit, r.hit_rate, clock(r.seconds)]
+          : boardView === 'blitz'
           ? [i + 1, r.username, r.score, r.seed, tierName(r.tier), r.rung1,
              r.entries + '/' + r.entry_limit, r.hit_rate, clock(r.seconds)]
           : boardView === 'me'
@@ -1012,9 +1063,14 @@
           : [i + 1, r.username, r.score, r.seed, r.rung1,
              r.entries + '/' + r.entry_limit, r.hit_rate, r.points_per_entry,
              awayCell(r), clock(r.seconds)];
-        tr.className += ' clickable';
-        tr.title = 'open the full metrics for this round';
-        tr.addEventListener('click', function () { openRun(r); });
+        /* Daily rows carry standings only — no metrics blob, no word list,
+           deliberately — so there is nothing to open. Opening one would
+           also show another player's answers to a word still in play. */
+        if (boardView !== 'daily') {
+          tr.className += ' clickable';
+          tr.title = 'open the full metrics for this round';
+          tr.addEventListener('click', function () { openRun(r); });
+        }
         cells.forEach(function (value, col) {
           var td = document.createElement('td');
           td.textContent = (value === null || value === undefined) ? '—' : value;
@@ -1024,6 +1080,16 @@
         });
         el.boardTbody.appendChild(tr);
       });
+      if (boardView === 'daily') {
+        el.boardNote.innerHTML = gate && gate.local
+          ? 'This is what this browser knows — your own round. Sign in and you join the ' +
+            'shared board with everyone else who played today.'
+          : 'Everyone who played today’s word, first attempt only, one row each' +
+            (gate && gate.you ? ' — you are <b>#' + gate.you + '</b> of ' + gate.players : '') +
+            '. Rows do not open: another player’s answers are still today’s answers. ' +
+            'Tomorrow this round joins its tier board.';
+        return;
+      }
       el.boardNote.innerHTML = (boardView === 'blitz'
         ? 'Best timed round per player, across all tiers — a countdown makes the tiers ' +
           'comparable in a way untimed play does not.'
@@ -1037,6 +1103,87 @@
     }, function (err) {
       if (run !== boardRun) return;
       el.boardNote.textContent = 'Could not load the board: ' + err.message;
+    });
+  }
+
+  /* ---------- today's daily board ---------------------------------------
+     Who else played today's word. Kept off the page until the round is
+     over: a board showing scores and first-order counts for a word you
+     have not opened yet is a spoiler, and the seed itself would be one
+     click away. The server enforces the same rule — see supabase-daily.sql
+     — so this is the polite half of the gate, not the whole of it. */
+
+  var DAILY_COLS = ['#', 'player', 'score', 'words', '1st', 'entries', 'hit', 'time'];
+  var dailyRun = 0;
+
+  function renderDailyBoard() {
+    if (!el.dailyBoard) return;
+
+    el.dailyThead.innerHTML = '';
+    var head = document.createElement('tr');
+    DAILY_COLS.forEach(function (label) {
+      var th = document.createElement('th');
+      th.textContent = label;
+      head.appendChild(th);
+    });
+    el.dailyThead.appendChild(head);
+    el.dailyTbody.innerHTML = '';
+    el.dailyNote.textContent = 'loading…';
+    el.dailyWhere.textContent = todayKey();
+
+    // Same ticket guard as the tier boards: a refresh and an onChange can
+    // be in flight together, and only the newest one may draw.
+    var run = ++dailyRun;
+    scoreboard.dailyBoard(CFG.boardSize || 25, todayKey()).then(function (board) {
+      if (run !== dailyRun) return;
+      el.dailyTbody.innerHTML = '';
+
+      if (!board || !board.played) {
+        el.dailyNote.textContent = board && board.reason === 'signed-out'
+          ? 'Sign in and today’s round joins the shared board.'
+          : 'This board opens once you have finished today’s word.';
+        return;
+      }
+
+      (board.rows || []).forEach(function (r) {
+        var tr = document.createElement('tr');
+        if (r.mine) tr.className = 'mine';
+        [r.place, r.username, r.score, r.words, r.rung1,
+         r.entries + '/' + r.entry_limit, r.hit_rate, clock(r.seconds)
+        ].forEach(function (value, col) {
+          var td = document.createElement('td');
+          td.textContent = (value === null || value === undefined) ? '—' : value;
+          if (col === 2) td.className = 'num strong';
+          else if (typeof value === 'number') td.className = 'num';
+          tr.appendChild(td);
+        });
+        el.dailyTbody.appendChild(tr);
+      });
+
+      var players = board.players || 0;
+      el.dailyWhere.textContent = todayKey() + ' · ' +
+        players + (players === 1 ? ' player' : ' players');
+
+      if (board.local) {
+        /* Be plain about it. A board with one name on it looks broken
+           unless you say why it has one name on it. */
+        el.dailyNote.textContent =
+          'This is what this browser knows — your own round. Sign in and you appear ' +
+          'on the shared board with everyone else who played today.';
+        return;
+      }
+
+      var note = 'Everyone who played today’s word, first attempt only, one row each.';
+      if (board.you) note += ' You are #' + board.you + ' of ' + players + '.';
+      if (players > (board.rows || []).length) {
+        note += ' Showing the top ' + board.rows.length + '.';
+      }
+      note += ' The board stays shut until a player has finished the word, so it ' +
+              'cannot give the day away.';
+      el.dailyNote.textContent = note;
+    }, function (err) {
+      if (run !== dailyRun) return;
+      el.dailyNote.textContent = 'Could not load today’s board: ' + err.message;
     });
   }
 
@@ -1147,8 +1294,12 @@
         say('Round saved in this browser — sign in and it will upload.', 'neutral');
       }
       renderBoard();
+      // Only now: the board is gated on your round existing, so asking
+      // before the save landed would be told you had not played.
+      showDailyBoard();
     }).catch(function (err) {
       console.warn('[synonym ladder] could not file the round:', err && err.message);
+      showDailyBoard();
     });
   }
 
@@ -1171,6 +1322,9 @@
   scoreboard.onChange(function () {
     renderAccount();
     renderBoard();
+    /* Signing in after a daily uploads the round that was sitting in this
+       browser, which turns a board of one into the real one. Redraw it. */
+    if (el.dailyBoard && !el.dailyBoard.hidden) renderDailyBoard();
     var id = scoreboard.remoteIdentity();
     if (id && id.signedIn && el.sheet && !el.sheet.hidden) {
       clearTimeout(state.signInWatchdog);
@@ -1187,6 +1341,10 @@
     });
   });
   on(el.runClose, 'click', function () { el.runDetail.hidden = true; });
+
+  /* Worth having at a booth: rounds land while you are standing there,
+     and nobody wants to reload the page mid-conversation. */
+  on(el.dailyRefresh, 'click', renderDailyBoard);
 
   on(el.linkGoogle, 'click', function () {
     el.accountNote.textContent = 'redirecting to Google…';
@@ -1336,8 +1494,24 @@
     // A finished round is filed once; re-showing a saved daily is not a replay.
     if (!silent && !state.filed) {
       state.filed = true;
-      saveRound();
+      saveRound();          // which opens the daily board once it settles
+    } else {
+      showDailyBoard();
     }
+  }
+
+  /* The daily board belongs to a finished daily and nothing else. Called
+     from both ends of finishRound: after the round is filed, so your own
+     row is on it, and immediately when re-opening a daily you already
+     played, where there is nothing left to file. */
+  function showDailyBoard() {
+    if (!el.dailyBoard) return;
+    if (state.mode !== 'daily' || !state.finished) {
+      el.dailyBoard.hidden = true;
+      return;
+    }
+    el.dailyBoard.hidden = false;
+    renderDailyBoard();
   }
 
   function addStat(key, value) {

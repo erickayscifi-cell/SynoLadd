@@ -90,7 +90,7 @@ console.log('\nlocal driver');
 var storage = fakeStorage();
 var local = SB.createLocalDriver(storage);
 var name = local.identity().username;
-check('invents a name on first run', /^player-[a-z0-9]{4}$/.test(name), true);
+check('invents a browser-local name on first run', /^guest-[a-z0-9]{4}$/.test(name), true);
 check('keeps that name', local.identity().username, name);
 
 local.setUsername('kris').then(function () {
@@ -113,6 +113,46 @@ local.setUsername('kris').then(function () {
 }).then(function (rows) {
   check('personal history keeps every round, newest first',
     rows.map(function (r) { return r.id; }), ['r-c', 'r-b', 'r-a']);
+})
+
+// ---- the daily board's gate ---------------------------------------
+/* The rule the whole feature rests on: no round today, no board. It is
+   enforced in SQL as well (supabase-daily.sql) — this covers the local
+   driver, which is what a signed-out player is actually reading. */
+.then(function () {
+  console.log('\ndaily board');
+  var d = SB.createLocalDriver(fakeStorage());
+  return d.dailyBoard(25, '2026-03-16').then(function (board) {
+    check('shut before you have played', [board.played, board.reason, board.rows.length],
+      [false, 'not-played', 0]);
+
+    // a practice round today must not open it
+    return d.save(SB.buildRecord(roundInput({ id: 'r-prac', mode: 'practice' })))
+      .then(function () { return d.dailyBoard(25, '2026-03-16'); });
+  }).then(function (board) {
+    check('a practice round is not a daily round', board.played, false);
+
+    return d.save(SB.buildRecord(roundInput({
+      id: 'r-daily', mode: 'daily', playedAt: '2026-03-16T09:00:00.000Z'
+    }))).then(function () { return d.dailyBoard(25, '2026-03-16'); });
+  }).then(function (board) {
+    check('opens once today’s daily is filed', [board.played, board.rows.length], [true, 1]);
+    check('marked local, so the page can explain the board of one', board.local, true);
+    check('your row is yours', [board.rows[0].place, board.rows[0].mine, board.you], [1, true, 1]);
+    check('carries no seed word — you know it, and nobody else should',
+      board.rows[0].seed === undefined, true);
+
+    // a second attempt must not displace the first
+    return d.save(SB.buildRecord(roundInput({
+      id: 'r-daily-2', mode: 'daily', playedAt: '2026-03-16T21:00:00.000Z',
+      metrics: metricsFixture({ score: 99 })
+    }))).then(function () { return d.dailyBoard(25, '2026-03-16'); });
+  }).then(function (board) {
+    check('the first attempt stands, not the best', [board.rows.length, board.rows[0].score], [1, 46]);
+    return d.dailyBoard(25, '2026-03-17');
+  }).then(function (board) {
+    check('yesterday’s round does not open today', board.played, false);
+  });
 })
 
 // ---- failover: cloud configured but unreachable -------------------
@@ -167,6 +207,50 @@ local.setUsername('kris').then(function () {
   check('and reports why', result.error, 'network down');
   check('and leaves it pending', result.record.pending, true);
 })
+/* Signed out, with a cloud driver registered: personal history must still
+   come from this browser. Reading it from the cloud returned an empty list
+   and hid rounds that were saved locally all along. */
+.then(function () {
+  console.log('\nsigned out, cloud present');
+  var sb = SB.createScoreboard({
+    local: SB.createLocalDriver(fakeStorage()),
+    cloudConfigured: true
+  });
+  var signedOutRemote = {
+    name: 'cloud-signed-out',
+    identity: function () { return { username: null, source: 'none', signedIn: false }; },
+    setUsername: function () { return Promise.reject(new Error('not signed in')); },
+    save: function () { return Promise.reject(new Error('not signed in')); },
+    topByTier: function () { return Promise.resolve([{ username: 'someone', score: 99 }]); },
+    myRounds: function () { return Promise.resolve([]); }   // the cloud knows nothing about you
+  };
+  sb.useRemote(signedOutRemote);
+  return sb.save(SB.buildRecord(roundInput({ id: 'r-practice', mode: 'practice' })))
+    .then(function (r) {
+      check('a practice round is kept even when signed out', r.stored, 'local');
+      return sb.myRounds(10);
+    })
+    .then(function (rows) {
+      check('your progress reads from this browser when signed out',
+        rows.map(function (x) { return x.id; }), ['r-practice']);
+      return sb.topByTier('easy', 5);
+    })
+    .then(function (rows) {
+      check('the shared board still comes from the cloud', rows[0].username, 'someone');
+      return sb.save(SB.buildRecord(roundInput({
+        id: 'r-daily-out', mode: 'daily', playedAt: '2026-03-16T09:00:00.000Z'
+      })));
+    })
+    /* The daily board must follow the round, not the connection. Asking the
+       server while signed out would answer "you have not played" to someone
+       who just did — the round is sitting in this browser. */
+    .then(function () { return sb.dailyBoard(25, '2026-03-16'); })
+    .then(function (board) {
+      check('the daily board reads this browser when signed out',
+        [board.played, board.local, board.rows.length], [true, true, 1]);
+    });
+})
+
 .then(function () {
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);

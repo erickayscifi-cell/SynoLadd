@@ -7,6 +7,8 @@
   --loose: #c08a2e;
   --miss: #b5504a;
   --miss-line: #e6c3c0;
+  --hit: #2f6fb0;          /* a landed entry: blue, distinct from the teal accent */
+  --spent: #6b6a66;        /* a retry that cost an entry but no points */
   --panel: #ffffff;
   --radius: 6px;
   --font: "Inter", "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
@@ -22,6 +24,8 @@
     --loose: #d8a44a;
     --miss: #e07a72;
     --miss-line: #5a3a38;
+    --hit: #6aa6e0;
+    --spent: #74736e;
     --panel: #1f2124;
   }
 }
@@ -130,6 +134,47 @@ main { max-width: 1080px; margin: 0 auto; padding: 26px 22px 60px; }
 .message.ok { color: var(--accent); }
 .message.no { color: var(--miss); }
 .message.neutral { color: var(--muted); }
+
+/* ---- the entry track ---- */
+.track-block { margin: 0 0 18px; }
+
+.track {
+  display: flex;
+  gap: 3px;
+  /* thin bars rather than boxes: a strip you read at a glance */
+  height: 12px;
+}
+
+.pip {
+  flex: 1 1 0;
+  min-width: 6px;
+  border-radius: 2px;
+  border: 1px solid var(--line);
+  background: transparent;      /* an unspent entry: outline only */
+  transition: background-color 140ms ease, border-color 140ms ease;
+}
+.pip.hit   { background: var(--hit);   border-color: var(--hit); }
+.pip.miss  { background: var(--miss);  border-color: var(--miss); }
+.pip.spent { background: var(--spent); border-color: var(--spent); }
+
+.track-key {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 7px 0 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+/* the key reuses .pip, so it needs a fixed size rather than flex */
+.track-key .pip {
+  flex: none;
+  width: 16px;
+  height: 10px;
+  margin-left: 10px;
+}
+.track-key .pip:first-child { margin-left: 0; }
 
 /* ---- board table ---- */
 .board { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); }
@@ -397,6 +442,13 @@ tbody tr:last-child td { padding-bottom: 14px; }
 .board-table tr.mine td { background: rgba(31, 111, 107, 0.08); }
 .board-note { margin: 12px 0 0; font-size: 0.82rem; color: var(--muted); }
 .board-note em { font-style: normal; color: var(--fg); }
+/* Today's daily board, on the game page: the same table as the scoreboard,
+   sitting under the round summary once the round is over. Narrower minimum
+   than the tier boards — it carries fewer columns and often shares a phone
+   screen with the summary above it. */
+.daily-board { margin-top: 16px; }
+.daily-board .board-table { min-width: 460px; }
+
 .board-table tr.clickable { cursor: pointer; }
 .board-table tr.clickable:hover td { background: rgba(31, 111, 107, 0.06); }
 

@@ -173,6 +173,39 @@
         return Promise.resolve(list.slice(0, limit || 25));
       },
 
+      /* Today's daily, as far as this browser can see it — which is only
+         ever you. Same shape the SQL function returns, so the page can
+         render it without asking which driver answered. It is honest
+         rather than useful: the note under the table says so. */
+      dailyBoard: function (limit, today) {
+        var day = today || new Date().toISOString().slice(0, 10);
+        var mine = rounds().filter(function (r) {
+          return r.mode === 'daily' && r.played_on === day;
+        }).sort(function (a, b) { return (a.played_at || '') < (b.played_at || '') ? -1 : 1; });
+
+        if (!mine.length) {
+          return Promise.resolve({
+            day: day, played: false, reason: 'not-played', players: 0, you: null, rows: []
+          });
+        }
+        var first = mine[0];
+        return Promise.resolve({
+          day: day,
+          played: true,
+          reason: null,
+          local: true,             // the page uses this to explain the lonely board
+          players: 1,
+          you: 1,
+          rows: [{
+            place: 1, username: first.username || identity().username,
+            score: first.score, words: first.words, rung1: first.rung1,
+            entries: first.entries, entry_limit: first.entry_limit,
+            hit_rate: first.hit_rate, points_per_entry: first.points_per_entry,
+            seconds: first.seconds, played_at: first.played_at, mine: true
+          }]
+        });
+      },
+
       myRounds: function (limit) {
         var me = identity().username;
         var list = rounds().filter(function (r) { return !r.username || r.username === me; });
@@ -306,6 +339,16 @@
       blitzBoard: function (limit) {
         var d = active();
         return d.blitzBoard ? d.blitzBoard(limit) : Promise.resolve([]);
+      },
+
+      /* Today's daily board follows the same rule as your own history: it
+         is gated on having played, and your round is only in the cloud if
+         you were signed in when you played it. Asking the server while
+         signed out returns "you have not played" to someone who just did. */
+      dailyBoard: function (limit, today) {
+        var d = whoDriver();
+        if (!d.dailyBoard) return Promise.resolve({ played: false, reason: 'unavailable', players: 0, rows: [] });
+        return d.dailyBoard(limit, today);
       },
 
       /* Your own history must come from wherever your rounds actually are.

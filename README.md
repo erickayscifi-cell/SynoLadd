@@ -33,6 +33,7 @@ The three tiers are **simple**, **literary** and **erudite** — they describe t
 | `supabase-schema.sql` | Tables, constraints, RLS policies, leaderboard view |
 | `supabase-seeds.sql` | Seed words in the database, unreadable by the client. Run to move the word list off GitHub. |
 | `supabase-thesaurus.sql` | Moby Thesaurus II in Postgres, merged with Datamuse at lookup time |
+| `supabase-daily.sql` | Today's daily board, and the policy that keeps today's daily rounds unreadable until you have played. **Run this.** |
 | `supabase-account.sql` | Self-service account deletion; rounds survive, detached and relabelled |
 | `supabase-promos.sql` | Writer submissions: table, eligibility policy, review queue. Run when ready. |
 | `about.html` | About-the-author page. Plain HTML, no scripts — edit by hand. |
@@ -119,7 +120,24 @@ Two views, matching how the game is meant to be used:
 - **Top scores, per tier** — one board each for simple, literary and erudite, showing each player's *best* round on that tier. Per-tier is deliberate: a score on *touch* and a score on *discordant* are not comparable, so a single global board would just rank people by which words they chose. One row per player keeps a strong player from filling the board.
 - **Your progress** — every round you have finished, newest first. This is the view that serves the training goal: watch the 1st-order count and points-per-entry climb on the same seed over weeks.
 
+- **Today** — everyone who played today's daily word, one row each. It is shut until you have played it yourself; see below.
+
 Click any row to expand the full metrics for that round, along with the words found at each rung and the tries that missed. Rounds store their entire metrics blob (`rounds.metrics`), because graph density and language figures depend on the live thesaurus cache and cannot be recomputed from the word list afterwards. Rounds filed before that column existed still open — the app rebuilds the scoring tree and character stats from `found` and marks the rest unavailable rather than inventing it.
+
+### The daily board, and why it needed SQL
+
+The daily board appears under the summary when a daily round ends, and as the **today** tab on the scoreboard page. It shows first attempts only — a daily is one shot, and ranking by best score would quietly reward anyone who found a way to file a second.
+
+It stays shut until you have played today's word. Hiding it in the UI alone would have been theatre: `rounds` had a `select using (true)` policy, so the anon key in `config.js` — which is published, by design — could pull today's rows straight from the REST API. That hands over the seed word, the scores, and `found`, which is the complete answer sheet. A locked door beside an open window is not a lock.
+
+So `supabase-daily.sql` does two things, and the second is the one that matters:
+
+1. `daily_board()`, a security-definer function that returns the day's standings and refuses if you have no daily round filed for today. It never returns the seed word — you already know it if you have played.
+2. A narrower select policy: today's daily rows are visible only to their own author. Everything else stays exactly as public as it was — practice, blitz, and every daily from any previous day.
+
+The visible consequence: **a daily round does not appear on its tier leaderboard until the next day.** That is the same rule seen from the other side, since a daily round sitting on the simple board names today's word to anyone who reads the seed column.
+
+Signed out, the board falls back to what this browser knows — your own round, and a note saying so. That is honest rather than useful, and it is one more reason to sign in.
 
 ### Click-aways, honestly
 
@@ -133,10 +151,11 @@ If competitive integrity ever matters more than it does now, the effective move 
 
 1. Create a project at [supabase.com](https://supabase.com) (the free tier is plenty to start).
 2. **SQL Editor** → paste `supabase-schema.sql` → Run. That creates `profiles`, `rounds`, the `leaderboard` view, the indexes and the RLS policies.
-3. **Authentication → Providers → Google**: enable it, and paste in a Google OAuth client ID and secret from the [Google Cloud console](https://console.cloud.google.com/apis/credentials). Supabase shows you the callback URL to register there.
-4. **Authentication → Providers → Anonymous sign-ins**: enable, so people can play without an account.
-5. **Authentication → URL Configuration**: add your hosting URL to the redirect allow-list.
-6. **Project Settings → API**: copy the Project URL and a browser-safe key into `config.js`. The URL is `https://<project-ref>.supabase.co` — the `.co` API host, not the `supabase.com/dashboard/project/<ref>` address you browse. For the key, either the newer **publishable** key (`sb_publishable_…`) or the legacy **anon public** JWT (`eyJ…`) works; they are interchangeable in the client, and legacy keys are being retired through 2026, so prefer publishable. Never the secret / `service_role` key.
+3. **SQL Editor** → `supabase-daily.sql` → Run. Adds the daily board and, more to the point, stops the anon key reading today's daily rounds — including the answers. Skipping it leaves the board's gate cosmetic.
+4. **Authentication → Providers → Google**: enable it, and paste in a Google OAuth client ID and secret from the [Google Cloud console](https://console.cloud.google.com/apis/credentials). Supabase shows you the callback URL to register there.
+5. **Authentication → Providers → Anonymous sign-ins**: enable, so people can play without an account.
+6. **Authentication → URL Configuration**: add your hosting URL to the redirect allow-list.
+7. **Project Settings → API**: copy the Project URL and a browser-safe key into `config.js`. The URL is `https://<project-ref>.supabase.co` — the `.co` API host, not the `supabase.com/dashboard/project/<ref>` address you browse. For the key, either the newer **publishable** key (`sb_publishable_…`) or the legacy **anon public** JWT (`eyJ…`) works; they are interchangeable in the client, and legacy keys are being retired through 2026, so prefer publishable. Never the secret / `service_role` key.
 
 **"Enable automatic RLS" — yes, turn it on.** It installs an event trigger that runs `alter table … enable row level security` on any new table created in the `public` schema. It's redundant for this project's two tables (the schema enables RLS on both explicitly) and it's idempotent, so it changes nothing here — its value is the table you add in six months and forget to protect. A table with RLS on and no policies is unreadable rather than world-readable, which is the right way to fail.
 
@@ -238,6 +257,14 @@ The tool is a workbench, not part of the site. If you'd rather the candidate lis
 Not weak randomness: a 16-word pool drawn *with replacement*. Ten rounds averaged 2.4 repeats even with a perfect random source. Draws now avoid the last 12 words per tier (kept in `localStorage`, and passed to `practice_seed` so the database excludes them too), which takes that to zero until the pool is exhausted.
 
 Picks use `crypto.getRandomValues()`. A browser fingerprint would be *worse* for this — it is stable per browser, so it correlates draws rather than scattering them, and it contradicts the privacy page.
+
+## Caching lookups
+
+Words repeat heavily across rounds — *clear*, *loud*, *plain* turn up again and again — so the merged answer for each word is kept: in memory for the session, and in `localStorage` for a week after, capped at 150 words with the oldest evicted. A repeated word then costs nothing at all. Measured on a simulated session: eight lookups over five distinct words made four network calls, and a reload made none.
+
+**It is deliberately per browser.** A shared cache would need somewhere for clients to *write* what they fetched, and an open write endpoint on a public anon key is an invitation to poison the entry for *clear* on everyone's board. If you want a shared cache later, the safe shape is a Supabase **Edge Function** that fetches Datamuse server-side and writes the result itself, with clients only ever reading. Then no browser can put words into the corpus.
+
+A cheaper version of the same idea, with no server code: pre-fetch Datamuse for the few thousand commonest words offline and load them into a read-only table beside `thesaurus`. Most lookups would then never leave your database.
 
 ## A second thesaurus
 

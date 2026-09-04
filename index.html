@@ -79,6 +79,18 @@
     </p>
   </section>
 
+  <!-- One mark per entry, in the order they were spent. Hidden from screen
+       readers: the "entries left" stat already says the same thing. -->
+  <section class="track-block">
+    <div class="track" id="entry-track" aria-hidden="true"></div>
+    <p class="track-key">
+      <span class="pip hit"></span> landed
+      <span class="pip miss"></span> missed
+      <span class="pip spent"></span> retry
+      <span class="pip"></span> left
+    </p>
+  </section>
+
   <section class="board">
     <table id="board-table">
       <thead>
@@ -118,6 +130,26 @@
     </div>
   </section>
 
+  <!-- Everyone who played today's word. Appears only after the daily is
+       finished, and only in daily mode: before that it would give away
+       both the word and what people found in it. -->
+  <section class="panel daily-board" id="daily-board" hidden>
+    <div class="board-head">
+      <h2>Today's players</h2>
+      <span class="board-where" id="daily-where"></span>
+    </div>
+    <div class="board-scroll">
+      <table class="board-table">
+        <thead id="daily-thead"></thead>
+        <tbody id="daily-tbody"></tbody>
+      </table>
+    </div>
+    <p class="board-note" id="daily-note"></p>
+    <div class="panel-actions">
+      <button type="button" class="link" id="btn-daily-refresh">refresh</button>
+    </div>
+  </section>
+
   <section class="finish">
     <button type="button" class="link" id="btn-finish">finish round</button>
     <button type="button" class="link" id="btn-metrics">metrics</button>
@@ -145,6 +177,7 @@
       <li>You get <b>20 entries</b>. A word that lands and a word that misses each spend one; same-root words and repeats of what's already on the board are free. When the 20 are gone the round is over.</li>
       <li>The clock starts on your first entry, not when the word appears.</li>
       <li><b>Blitz</b> is the same game against a countdown. The round ends when the clock runs out or the 20 entries do, whichever comes first — so it rewards going wide fast rather than deliberating.</li>
+      <li>The <b>daily</b> word is the same for everyone, and once your round ends you see everyone else who played it today. Not before: a board of scores and first-order counts would give the day away, so it stays shut — and so do today's daily rounds on the tier boards, which join them tomorrow.</li>
       <li>A word that links to nothing — a miss or a misspelling — drops into <b>tries</b> and costs <b>1</b> point. There is no spellcheck and no hint about what went wrong.</li>
       <li>A word is charged once. Anything on the tries list can be entered again for free, as often as you like — a word that linked to nothing early on may well land once the board has grown around it.</li>
       <li>A word sharing a root with one already in play (<i>discord</i> and <i>discordant</i> are the same word) goes to <b>same root</b> instead. That bucket is neutral: no points, no penalty. It isn't a wrong answer, it just can't be its own answer.</li>

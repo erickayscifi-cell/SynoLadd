@@ -176,6 +176,16 @@ if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) {
       return data || [];
     },
 
+    /* Today's daily standings. The function decides whether to answer —
+       it hands back { played: false } until you have filed a daily round
+       of your own for today, and never returns the seed word. See
+       supabase-daily.sql. */
+    async dailyBoard(limit) {
+      const { data, error } = await supabase.rpc('daily_board', { p_limit: limit || 25 });
+      if (error) throw new Error(error.message);
+      return data || { played: false, reason: 'unavailable', players: 0, rows: [] };
+    },
+
     async myRounds(limit) {
       if (!session) return [];
       const { data, error } = await supabase

@@ -347,6 +347,46 @@ game.start()
       });
   })
 
+  /* ---- the entry track: one mark per entry actually spent ---- */
+  .then(function () {
+    console.log('\nentry track');
+    var maps = {
+      plain:  { clear: { score: 40000000, syn: true },
+                simple: { score: 30000000, syn: false } },
+      clear: {}, simple: {}, banana: {}, plains: {}
+    };
+    var g = SL.createGame({
+      seed: 'plain',
+      config: { guessLimit: 8 },
+      fetcher: function (w) { return Promise.resolve(maps[w] || {}); },
+      infoFetcher: infoFetcher
+    });
+    return g.start()
+      .then(function () { return g.submit('clear'); })
+      .then(function () { return g.submit('banana'); })
+      .then(function () { return g.submit('plains'); })   // same root — free
+      .then(function () { return g.submit('clear'); })    // duplicate — free
+      .then(function () { return g.submit('banana'); })   // retry — spends one
+      .then(function () { return g.submit('simple'); })
+      .then(function () {
+        check('marks read in the order they were spent',
+          g.log(), ['hit', 'miss', 'spent', 'hit']);
+        check('free moves leave no mark', g.log().length, g.guesses());
+        check('entries left agrees with the track', g.guessesLeft(), 4);
+      })
+      .then(function () {
+        // a resumed round keeps its marks
+        var again = SL.createGame({
+          seed: 'plain', config: { guessLimit: 8 },
+          fetcher: function (w) { return Promise.resolve(maps[w] || {}); },
+          infoFetcher: infoFetcher
+        });
+        return again.start()
+          .then(function () { return again.restore(g.found(), g.tries(), g.roots(), g.log()); })
+          .then(function () { check('restore keeps the track', again.log(), ['hit', 'miss', 'spent', 'hit']); });
+      });
+  })
+
   /* ---- every route in, not just the one BFS walked ----
      On a real "stark" board, several first-order words all linked to the
      same second-order one. Naming a single parent hid that. */

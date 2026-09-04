@@ -226,6 +226,13 @@
     var byRoot = {};          // word -> root note
     var guesses = 0;
     var typedChars = 0;
+    /* One mark per entry actually spent, in the order they were spent:
+       'hit'   a word that landed
+       'miss'  a word that linked to nothing, charged a point
+       'spent' a retry of a word already on the tries list — no points lost,
+               but the entry is gone
+       Same-root words and duplicates never appear: they cost nothing. */
+    var log = [];
 
     function related(word) {
       if (neighbours[word]) return Promise.resolve(neighbours[word]);
@@ -353,7 +360,7 @@
     }
 
     /* Rebuild a saved round (page refresh, returning to today's puzzle). */
-    function restore(entries, savedTries, savedRoots) {
+    function restore(entries, savedTries, savedRoots, savedLog) {
       found = [];
       byWord = {};
       tries = [];
@@ -393,6 +400,13 @@
         byWord[word] = entry;
         loadInfo(word);
       });
+      /* The order entries were spent in cannot be reconstructed from the
+         board alone, so a resumed round uses the saved marks when it has
+         them and falls back to hits-then-misses when it does not. */
+      log = Array.isArray(savedLog) && savedLog.length
+        ? savedLog.slice()
+        : found.map(function () { return 'hit'; })
+                .concat(tries.map(function () { return 'miss'; }));
       guesses = found.length + tries.length;
       typedChars = found.concat(tries).concat(roots)
         .reduce(function (n, e) { return n + e.word.length; }, 0);
@@ -457,6 +471,7 @@
 
       return related(guess).then(ensureFrontier).then(function () {
         var spot = placement(guess);
+        log.push(spot ? 'hit' : (retry ? 'spent' : 'miss'));
         var result = spot ? admit(guess, spot)
           : retry
             ? reject('retry', '“' + guess + '” still links to nothing — no further points lost, ' +
@@ -466,9 +481,10 @@
         result.over = limitReached();
         return result;
       }).catch(function (err) {
-        // A failed lookup should not cost an entry.
+        // A failed lookup should not cost an entry, or leave a mark.
         guesses--;
         typedChars -= guess.length;
+        if (log.length) log.pop();
         return reject('error', err && err.message ? err.message : 'Lookup failed.');
       });
     }
@@ -748,6 +764,7 @@
       sweep: sweep,
       found: function () { return found.slice(); },
       tries: function () { return tries.slice(); },
+      log: function () { return log.slice(); },
       roots: function () { return roots.slice(); },
       score: score,
       rawScore: rawScore,
