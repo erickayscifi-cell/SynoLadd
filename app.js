@@ -1451,6 +1451,18 @@
       ? 'You already played “' + state.game.seed + '” today'
       : '“' + state.game.seed + '” — ' + score + ' points';
 
+    /* A restored daily reaches this point straight from startRound, which
+       has just said "Loading the thesaurus…" and then hands over without
+       speaking again — leaving that line above a finished board, reading
+       as a page that never loaded.
+
+       Cleared rather than replaced. This line narrates the last thing the
+       player did, and on a refresh they have not done anything yet; the
+       summary panel below is what explains a finished round. Saying
+       something here would only duplicate it, and it is a live region, so
+       a screen reader would read the duplicate out. */
+    if (silent) say('');
+
     var limit = state.game.config.guessLimit;
     var why = state.reason === 'limit'
       ? 'All ' + limit + ' entries used.'
